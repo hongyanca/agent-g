@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
+from typing import Any
 
 from pydantic_ai import Agent, PromptedOutput
 from pydantic_ai.models import Model
@@ -52,6 +54,8 @@ _choices_agent: Agent[None, ChoicesOutput] | None = None
 _state_updater_agent: Agent[None, StateUpdaterOutput] | None = None
 _character_factory_agent: Agent[None, NewCharacterProfile] | None = None
 _consolidation_agents: dict[str, StructuredAgent] = {}
+
+_CHANNEL_PREFIX_RE = re.compile(r"^\s*<\|channel\>.*?<channel\|>\s*", re.DOTALL)
 
 
 _GOOGLE_SAFETY_OFF = [
@@ -125,6 +129,48 @@ def _build_model_settings(
     return settings
 
 
+def strip_leading_channel_prefix(data: str) -> str:
+    """Remove local LLM channel preambles that appear before prompted JSON output."""
+    return _CHANNEL_PREFIX_RE.sub("", data, count=1)
+
+
+class _ChannelPrefixStrippingProcessor:
+    """Adapter that cleans prompted text before pydantic-ai validates the JSON schema."""
+
+    def __init__(self, processor: Any) -> None:
+        self._processor = processor
+        self.object_def = processor.object_def
+
+    async def process(
+        self,
+        data: str | dict[str, Any] | None,
+        *,
+        run_context: Any,
+        allow_partial: bool = False,
+        wrap_validation_errors: bool = True,
+    ) -> Any:
+        if isinstance(data, str):
+            data = strip_leading_channel_prefix(data)
+        return await self._processor.process(
+            data,
+            run_context=run_context,
+            allow_partial=allow_partial,
+            wrap_validation_errors=wrap_validation_errors,
+        )
+
+
+def _install_prompted_output_cleanup(agent: StructuredAgent) -> None:
+    """Patch PromptedOutput processors so provider-specific channel prefixes do not break JSON parsing."""
+    output_schema = agent._output_schema
+    processor = getattr(output_schema, "processor", None)
+    if processor is None or isinstance(processor, _ChannelPrefixStrippingProcessor):
+        return
+
+    cleaned = _ChannelPrefixStrippingProcessor(processor)
+    output_schema.processor = cleaned
+    output_schema.text_processor = cleaned
+
+
 def _build_agent(
     *,
     name: str,
@@ -134,7 +180,7 @@ def _build_agent(
     max_tokens: int | None = None,
     output_retries: int | None = None,
 ) -> StructuredAgent:
-    return Agent(
+    agent = Agent(
         _make_sdk_model(config),
         name=name,
         instructions=instructions,
@@ -142,6 +188,8 @@ def _build_agent(
         output_type=PromptedOutput(output_type),
         output_retries=output_retries,
     )
+    _install_prompted_output_cleanup(agent)
+    return agent
 
 
 def initialize_conversation_agents() -> None:

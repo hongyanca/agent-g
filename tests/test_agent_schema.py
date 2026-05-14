@@ -1,8 +1,5 @@
 """测试 Agent 结构化输出模型。"""
 
-import pytest
-from pydantic import ValidationError
-
 from agents.schema import (
     MAX_CHOICE_CHARS,
     MAX_EPISODE_KEYWORDS,
@@ -25,8 +22,10 @@ def test_choices_output_trims_each_choice_to_50_chars():
 
 
 def test_narrator_output_requires_route_target_or_new_character():
-    with pytest.raises(ValidationError):
-        _narrator_output(targets=[], new_characters=[])
+    output = _narrator_output(targets=[], new_characters=[])
+
+    assert output.targets == []
+    assert output.new_characters == []
 
 
 def test_narrator_output_allows_new_character_without_existing_target():

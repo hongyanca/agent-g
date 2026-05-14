@@ -206,6 +206,13 @@ def test_narrator_route_validation_rejects_unknown_targets():
         Narrator._validate_route_output(output, ["mitsuki"])
 
 
+def test_narrator_route_validation_rejects_empty_route():
+    output = _narrator_output(targets=[], new_characters=[])
+
+    with pytest.raises(ValueError, match="missing route"):
+        Narrator._validate_route_output(output, ["mitsuki"])
+
+
 def test_narrator_route_validation_rejects_invalid_new_character_anchor():
     output = _narrator_output(
         targets=[],

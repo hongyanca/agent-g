@@ -9,7 +9,6 @@ from pydantic import (
     Field,
     RootModel,
     field_validator,
-    model_validator,
 )
 
 from shared.config import MAX_CHOICE_CHARS, MAX_EPISODE_KEYWORDS
@@ -87,13 +86,6 @@ class NarratorOutput(BaseModel):
         if not value:
             raise ValueError("field cannot be empty")
         return value
-
-    @model_validator(mode="after")
-    def require_route_target_or_new_character(self) -> "NarratorOutput":
-        if not self.targets and not self.new_characters:
-            raise ValueError("NarratorOutput must include targets or new_characters")
-        return self
-
 
 class NewCharacterProfile(BaseModel):
     """character_factory agent 的结构化输出：一次返回完整骨架种子。

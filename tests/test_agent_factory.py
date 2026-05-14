@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -47,6 +48,43 @@ def test_conversation_agents_use_prompted_output(monkeypatch):
 
     assert narrator._output_schema.mode == "prompted"
     assert character._output_schema.mode == "prompted"
+
+
+def test_prompted_output_cleanup_strips_leading_channel_prefix():
+    raw = '<|channel>thought\n<channel|>{"ok": true}'
+
+    assert agent_factory_module.strip_leading_channel_prefix(raw) == '{"ok": true}'
+
+
+@pytest.mark.asyncio
+async def test_prompted_output_processor_accepts_leading_channel_prefix(monkeypatch):
+    monkeypatch.setattr(agent_factory_module, "read_agent_file", lambda *_args: "# soul")
+    monkeypatch.setattr(agent_factory_module, "build_system_prompt", lambda *_args: "system prompt")
+    monkeypatch.setattr(agent_factory_module, "get_llm_config", _fake_config)
+
+    narrator = agent_factory_module.get_conversation_agent("narrator")
+    raw = """<|channel>thought
+<channel|>{
+  "targets": ["mitsuki"],
+  "date": "4月3日 星期一",
+  "time": "08:27",
+  "location": "图书馆旧阅览室",
+  "present_characters": {
+    "北原悠": "站在门口",
+    "一之濑美月": "离北原悠很近"
+  },
+  "scene_description": "旧教室里很安静。",
+  "new_characters": []
+}
+"""
+
+    output = await narrator._output_schema.text_processor.process(
+        raw,
+        run_context=SimpleNamespace(validation_context=None),
+    )
+
+    assert output.targets == ["mitsuki"]
+    assert output.location == "图书馆旧阅览室"
 
 
 def test_auxiliary_structured_agents_use_prompted_output(monkeypatch):

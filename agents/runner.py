@@ -8,6 +8,8 @@ import typing
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+from pydantic import ValidationError
+
 from log_config.routing import routing_logger
 from shared.config import AGENT_RUN_MAX_ATTEMPTS
 
@@ -46,6 +48,19 @@ def _build_run_metadata(
     return metadata
 
 
+def _describe_exception(exc: BaseException) -> str:
+    desc = str(exc)
+    cause = exc.__cause__
+    seen: set[int] = set()
+    while cause is not None and id(cause) not in seen:
+        seen.add(id(cause))
+        if isinstance(cause, ValidationError):
+            desc = f"{desc}; validation_errors={cause.errors(include_url=False)!r}"
+            break
+        cause = cause.__cause__
+    return desc
+
+
 async def _run_agent_with_retries(
     *,
     agent,
@@ -70,7 +85,7 @@ async def _run_agent_with_retries(
             exc_desc = (
                 f"超时（>{timeout_seconds}s）"
                 if isinstance(exc, asyncio.TimeoutError)
-                else f"失败: {exc}"
+                else f"失败: {_describe_exception(exc)}"
             )
             if attempt >= max_attempts:
                 routing_logger.error(
