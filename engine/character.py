@@ -54,9 +54,11 @@ from storage.agent_files import (
     append_memory_draft,
     mark_event_triggered,
     read_agent_file,
+    read_sidecar_json,
     read_turn_counter,
     update_status,
     update_status_allow_new_field,
+    write_sidecar_json,
 )
 from storage.history import load_conversation_history
 from world.schedule import load_character_schedule
@@ -66,6 +68,7 @@ _FILE_UPDATES_EVENT = "agentgal.routing.file_updates"
 
 # 由 add_event / mark_triggered 逐条维护，禁止通过 set_status_fields 整段覆写
 _EVENT_SECTION_FIELDS = {"打算", "待触发事件"}
+_WORLD_SCHEDULE_FILENAME = "world_schedule.json"
 
 
 def _wrap_block(tag: str, content: str) -> str:
@@ -331,6 +334,7 @@ class Narrator(BaseEntity):
 
     _EVENT_SECTION: ClassVar[str] = "待触发事件"
     _PLAYER_RELATION_SECTION: ClassVar[str] = "和玩家的关系"
+    _RECENT_WORLD_EVENT_SECTION: ClassVar[str] = "最近世界事件"
 
     def __init__(self) -> None:
         super().__init__(name="narrator")
@@ -353,7 +357,7 @@ class Narrator(BaseEntity):
         """运行 narrator → 返回 (清洗后的结构化输出, is_valid)。
 
         new_characters 是 narrator 本轮请求孵化的新角色 spec 列表；
-        此处只做 schema 层过滤（保留 relation_to 合法且描述非空的锚点），
+        此处只做 schema 层过滤（去重、去空描述），
         实际命名、孵化与目录校验由 engine.character_factory.create_character 负责。
         """
         if not observation_mode:
@@ -406,7 +410,6 @@ class Narrator(BaseEntity):
     ) -> None:
         """校验 schema 无法表达的运行时路由约束，失败交给 runner 重试。"""
         valid_targets = set(existing_agents)
-        valid_anchors = valid_targets | {"player"}
         errors: list[str] = []
 
         if not output.targets and not output.new_characters:
@@ -418,9 +421,6 @@ class Narrator(BaseEntity):
 
         for spec in output.new_characters:
             label = spec.name_hint.strip() or spec.relation_description.strip() or "new_character"
-            relation_to = spec.relation_to.strip()
-            if relation_to not in valid_anchors:
-                errors.append(f"{label!r} has invalid relation_to={relation_to!r}")
             if not spec.relation_description.strip():
                 errors.append(f"{label!r} missing relation_description")
 
@@ -432,22 +432,15 @@ class Narrator(BaseEntity):
         specs: list[NewCharacterRequest],
         existing_agents: list[str],
     ) -> list[NewCharacterRequest]:
-        """过滤 narrator 提交的 new_characters：去重、去空、去非法 relation_to。"""
-        valid_anchors = set(existing_agents) | {"player"}
+        """过滤 narrator 提交的 new_characters：去重、去空描述。"""
         kept: list[NewCharacterRequest] = []
-        seen: set[tuple[str, str, str]] = set()
+        seen: set[tuple[str, str]] = set()
         for spec in specs:
             name_hint = spec.name_hint.strip()
-            relation_to = spec.relation_to.strip()
             description = spec.relation_description.strip()
-            dedupe_key = (name_hint, relation_to, description)
+            dedupe_key = (name_hint, description)
             label = name_hint or description or "（未命名新角色）"
             if dedupe_key in seen:
-                continue
-            if relation_to not in valid_anchors:
-                routing_logger.warning(
-                    f"[narrator] new_characters 中 {label!r} 的 relation_to={relation_to!r} 不合法，跳过"
-                )
                 continue
             if not description:
                 routing_logger.warning(
@@ -457,7 +450,6 @@ class Narrator(BaseEntity):
             kept.append(
                 NewCharacterRequest(
                     name_hint=name_hint,
-                    relation_to=relation_to,
                     relation_description=description,
                     background_hint=spec.background_hint.strip(),
                     initial_location=spec.initial_location.strip(),
@@ -541,10 +533,13 @@ class Narrator(BaseEntity):
         recent_history = "\n\n".join(history_lines) if history_lines else "无"
 
         characters_block = build_characters_block()
+        world_schedule_content = read_agent_file(self.name, _WORLD_SCHEDULE_FILENAME)
 
         parts: list[str] = []
         if characters_block:
             parts.append(characters_block)
+        if world_schedule_content:
+            parts.append(_wrap_block("world_schedule", world_schedule_content.strip()))
         if schedule_snapshot:
             parts.append(schedule_snapshot)
         if latest_scene:
@@ -573,7 +568,42 @@ class Narrator(BaseEntity):
     def _apply_state_updates(self, output: StateUpdaterOutput) -> None:
         """把 StateUpdaterOutput 的字段 / 触发 / 新增事件落盘，并记录结构化日志。"""
         results: list[FileUpdateResult] = []
-        results.extend(self.set_status_fields(output.status.model_dump()))
+        status_fields = output.status.model_dump()
+        recent_world_event = status_fields.pop(self._RECENT_WORLD_EVENT_SECTION, "")
+        results.extend(self.set_status_fields(status_fields))
+        if recent_world_event:
+            results.append(
+                update_status_allow_new_field(
+                    self.name,
+                    self._RECENT_WORLD_EVENT_SECTION,
+                    recent_world_event,
+                )
+            )
+
+        schedule: dict | None = None
+        if output.world_schedule_update:
+            try:
+                schedule = json.loads(output.world_schedule_update)
+            except json.JSONDecodeError:
+                pass
+        elif output.triggered_world_events:
+            schedule = read_sidecar_json(self.name, _WORLD_SCHEDULE_FILENAME)
+
+        if output.triggered_world_events and schedule is not None:
+            names = set(output.triggered_world_events)
+            for event in schedule.get("events", []):
+                if event.get("name") in names and event.get("status") != "triggered":
+                    event["status"] = "triggered"
+
+        if schedule is not None:
+            write_sidecar_json(self.name, _WORLD_SCHEDULE_FILENAME, schedule)
+            results.append(
+                FileUpdateResult(
+                    file=_WORLD_SCHEDULE_FILENAME,
+                    target="world_schedule",
+                    operation="replace",
+                )
+            )
 
         for event_name in output.triggered:
             r = self.mark_triggered(event_name)

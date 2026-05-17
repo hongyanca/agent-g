@@ -107,6 +107,7 @@ server.py        ← all
 
 - `data/runtime/characters/last_choices.json`: Latest set of player options, restored on load, cleared on reset
 - `data/runtime/characters/.turn_counter.json`: Global narrator-turn counter, incremented by 1 for each narrator message; a turn starts with one narrator message and continues through character responses plus the next player input, until the following narrator message starts a new turn. Raw JSONL and `memory_draft.jsonl` entries carry turn numbers for `EpisodeClosureDetector` closure detection; reset clears with characters directory, and the opening narrator message writes the first turn
+- `data/runtime/characters/narrator/world_schedule.json`: Narrator-owned world event calendar; `state_updater` reads `events[].status` to push pending public school/world events by date and story phase, and runtime marks triggered world events as `status="triggered"`; can be replaced wholesale by `world_schedule_update` when the story moves to a new environment
 - `data/runtime/characters/narrator/tasks.md`: Optional story seed file; current main flow primarily syncs "Pending Events" from character "Intentions" via `state_updater`
 - `data/runtime/characters/*/.history_window_state.json`: Per-agent dialogue history high/low water mark window sidecar
 - `data/runtime/characters/*/.consolidation_state.json`: Character memory consolidation progress sidecar
@@ -152,9 +153,9 @@ Launch three post-response lines together:
   ↓
 Emit `response_done` so the UI can re-enable free input while those lines continue
   ↓
-state_updater inputs in order: `schedule_snapshot` (renders each character's schedule default location by current game_time, missing schedule marked "(no schedule)"), latest_scene_json, character_intention, current_narrator_status, recent_history
+state_updater inputs in order: characters, `world_schedule`, `schedule_snapshot` (renders each character's schedule default location by current game_time, missing schedule marked "(no schedule)"), latest_scene_json, character_intention, current_narrator_status, recent_history
   ↓
-state_updater outputs full "Character Locations" snapshot each round; priority: latest_scene_json / recent_history facts > character_intention with location > old snapshot > schedule_snapshot defaults
+state_updater outputs full "Character Locations" snapshot each round; priority: latest_scene_json / recent_history facts > character_intention with location > old snapshot > schedule_snapshot defaults. It also maintains "Recent World Event" as a derived narrator status field used to keep current world-event atmosphere and avoid duplicate world-event pushes.
   ↓
 state_updater syncs public "Pending Events" from each character's "Intentions" (event names preserve character names)
 ```
@@ -245,13 +246,12 @@ After each participation round of character responses, `generate_choices()` is l
 ## Long-Term Memory Retrieval
 
 - Vector store indexes long-term memory events from `memory.jsonl` and stable understandings from `understanding.jsonl` in separate tables; owner scope is fixed to current character
-- Each turn retrieves both episode memories (`<relevant_memories>`) and stable understandings (`<relevant_understandings>`); `engine/memory_query_builder.py` builds separate semantic and BM25 lexical queries from the latest visible scene, recent dialogue, and narrative focus, and the embedding request is batched when episode and understanding semantic queries differ
-- Retrieval query construction (`engine/memory_query_builder.py` → `RetrievalQueries`): filter raw history by `visible_to`, keep latest 4 visible messages; find the latest narrator structured scene as current scene, render `date + time / location / scene_description` (exclude ambient `present_characters` names); remaining visible messages become recent dialogue using display speaker names (via `role_to_speaker`); read narrator `叙事焦点`; build four queries, each falls back to current player input if empty:
-  - `episode` (semantic, limit 1800 chars): `当前场景` + `最近对话` + `叙事焦点`
-  - `episode_bm25` (lexical, limit 700 chars): `叙事焦点` + scene text + raw dialogue text (no speaker formatting)
-  - `understanding` (semantic, limit 1200 chars): `关系/行为焦点` + `近期可见对话`
-  - `understanding_bm25` (lexical, limit 700 chars): `叙事焦点` + raw dialogue text (no speaker formatting)
-  - BM25 uses raw dialogue text (not speaker-formatted lines) to maximize keyword hit rate; semantic queries use speaker-formatted dialogue for LLM context coherence
+- Each turn retrieves both episode memories (`<relevant_memories>`) and stable understandings (`<relevant_understandings>`); `engine/memory_query_builder.py` builds retrieval queries from the character's own `在意的事` status field and the current location extracted from the latest visible narrator message
+- Retrieval query construction (`engine/memory_query_builder.py` → `RetrievalQueries`): read character's `在意的事` from their own `status.md`; extract `location` from the most recent narrator message visible to that character; build four queries, each falls back to current player input if empty:
+  - `episode` (semantic, limit 1800 chars): `在意的事` + location + user_input (location anchors episode scene searches; EpisodeMemory embedding index includes location)
+  - `episode_bm25` (lexical, limit 700 chars): `在意的事` + user_input (location is not a useful BM25 signal)
+  - `understanding` (semantic, limit 1200 chars): `在意的事` + user_input (understandings are not place-bound; location adds noise)
+  - `understanding_bm25` (lexical, limit 700 chars): `在意的事` + user_input
 - `memory/retrieval.py` handles the full retrieval pipeline: semantic query embedding → vector candidates + optional BM25 lexical candidates → hybrid fusion → (optional) rerank → recency sort → recall state update
 - `storage/vector_store.py` is storage layer only: provides raw candidates for EpisodeMemory and Understanding tables, pipeline logic is not here
 - `memory/indexer.py` reads `EpisodeMemory` records from `memory.jsonl` and `Understanding` records from `understanding.jsonl`, then appends them to the vector store
@@ -306,6 +306,7 @@ Save includes:
 - Character `understanding.jsonl` (when present; stable beliefs linked back to EpisodeMemory ids)
 - Character `schedule.json` (when present)
 - Narrator raw history (each entry carries turn number)
+- Narrator `world_schedule.json` when present
 - Per-agent `.history_window_state.json`
 - Character `.consolidation_state.json`
 - `last_choices.json`

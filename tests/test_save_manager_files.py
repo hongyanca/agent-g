@@ -102,6 +102,36 @@ def test_character_save_files_omit_legacy_recall_sidecar(character_dir: Path):
     assert ".memory_recall_state.json" not in basenames
 
 
+def test_narrator_save_files_include_world_schedule_when_present(character_dir: Path):
+    narrator_dir = character_dir / "narrator"
+    narrator_dir.mkdir(parents=True)
+    (narrator_dir / "soul.md").write_text("# narrator\n", encoding="utf-8")
+    (narrator_dir / "status.md").write_text("## 当前时间\n4月5日\n", encoding="utf-8")
+    (narrator_dir / "world_schedule.json").write_text(
+        '{"events":[{"name":"体育祭报名","status":"pending"}]}',
+        encoding="utf-8",
+    )
+
+    files = save_manager._get_agent_save_files("narrator")
+    basenames = {Path(f).name for f in files}
+
+    assert "world_schedule.json" in basenames
+    assert "soul.md" in basenames
+
+
+def test_narrator_save_files_omit_world_schedule_when_missing(character_dir: Path):
+    narrator_dir = character_dir / "narrator"
+    narrator_dir.mkdir(parents=True)
+    (narrator_dir / "soul.md").write_text("# narrator\n", encoding="utf-8")
+    (narrator_dir / "status.md").write_text("## 当前时间\n4月5日\n", encoding="utf-8")
+
+    files = save_manager._get_agent_save_files("narrator")
+    basenames = {Path(f).name for f in files}
+
+    assert "world_schedule.json" not in basenames
+    assert "soul.md" in basenames
+
+
 def test_narrator_does_not_include_character_only_sidecars(character_dir: Path):
     narrator_dir = character_dir / "narrator"
     narrator_dir.mkdir(parents=True, exist_ok=True)
@@ -110,12 +140,14 @@ def test_narrator_does_not_include_character_only_sidecars(character_dir: Path):
     # 即便误放了这些文件，narrator 也不应把它们当作存档内容
     (narrator_dir / "schedule.json").write_text("{}", encoding="utf-8")
     (narrator_dir / ".memory_recall_state.json").write_text("{}", encoding="utf-8")
+    (narrator_dir / ".world_event_state.json").write_text("{}", encoding="utf-8")
 
     files = save_manager._get_agent_save_files("narrator")
     basenames = {Path(f).name for f in files}
 
     assert "schedule.json" not in basenames
     assert ".memory_recall_state.json" not in basenames
+    assert ".world_event_state.json" not in basenames
     assert "soul.md" in basenames
 
 

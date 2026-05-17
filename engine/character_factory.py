@@ -53,7 +53,6 @@ def _build_factory_user_message(spec: NewCharacterRequest) -> str:
 
     spec_lines = [
         "<spec>",
-        f"relation_to: {spec.relation_to}",
         f"relation_description: {spec.relation_description}",
         f"background_hint: {spec.background_hint or '（无）'}",
     ]
@@ -64,9 +63,10 @@ def _build_factory_user_message(spec: NewCharacterRequest) -> str:
     spec_lines.append("</spec>")
     spec_block = "\n".join(spec_lines)
 
-    blocks: list[str] = [spec_block]
-    if story_setting:
-        blocks.append(f"<story_setting>\n{story_setting}\n</story_setting>")
+    blocks: list[str] = [
+        f"<story_setting>\n{story_setting}\n</story_setting>",
+        spec_block,
+    ]
     blocks.append(
         "<world_now>\n"
         f"当前时间：{current_time}\n"
@@ -77,11 +77,7 @@ def _build_factory_user_message(spec: NewCharacterRequest) -> str:
 
 
 def _validate_spec(spec: NewCharacterRequest) -> str | None:
-    """返回错误描述；None 表示锚点校验通过。"""
-    valid_anchors = set(get_agent_names(include_narrator=False)) | {"player"}
-    anchor = spec.relation_to.strip()
-    if anchor not in valid_anchors:
-        return f"relation_to 不在可锚定角色中: {anchor!r}"
+    """返回错误描述；None 表示校验通过。"""
     if not spec.relation_description.strip():
         return "relation_description 为空"
     return None
@@ -104,17 +100,13 @@ def _validate_creation_character_id(character_id: str) -> str | None:
 def _write_status_md(
     agent_dir: Path,
     status: dict[str, str],
-    spec: NewCharacterRequest,
     display_name: str,
 ) -> None:
     """按 _STATUS_ORDER 顺序写 status.md；缺失字段用合理默认补齐。"""
     fields = {k: (v or "").strip() for k, v in status.items()}
     fields.pop("当前位置", None)
-    if not fields.get("和玩家的关系") and spec.relation_to == "player":
-        fields["和玩家的关系"] = spec.relation_description.strip()
     if not fields.get("打算"):
-        target = "玩家" if spec.relation_to == "player" else spec.relation_to
-        fields["打算"] = f"- [ ] 【见到{target}】找到合适的时机自然出现"
+        fields["打算"] = "- [ ] 【初次出现】找到合适的时机出现在场景里"
 
     ordered_keys = list(_STATUS_ORDER)
     for key in fields:
@@ -207,7 +199,7 @@ def _write_bootstrap_files(
 
     (agent_dir / "soul.md").write_text(soul_content, encoding="utf-8")
 
-    _write_status_md(agent_dir, creation.initial_status, spec, creation.display_name)
+    _write_status_md(agent_dir, creation.initial_status, creation.display_name)
 
     if not _write_schedule_json(agent_dir, creation.schedule):
         routing_logger.warning(
@@ -237,7 +229,7 @@ async def create_character(spec: NewCharacterRequest) -> CreatedCharacterInfo | 
             workflow_name="agentgal_character_factory",
             trace_metadata={
                 "agent_name": "character_factory",
-                "target": spec.name_hint.strip() or spec.relation_to,
+                "target": spec.name_hint.strip() or spec.relation_description[:20],
             },
             usage_agent="character_factory",
             usage_phase="agent_run",
@@ -271,7 +263,7 @@ async def create_character(spec: NewCharacterRequest) -> CreatedCharacterInfo | 
         routing_logger.warning(f"[character_factory] 刷新对话 agents 失败: {e}")
 
     routing_logger.info(
-        f"[character_factory] 生成 {creation.character_id!r}（锚点 relation_to={spec.relation_to}）"
+        f"[character_factory] 生成 {creation.character_id!r}（{spec.relation_description[:30]}）"
     )
     return CreatedCharacterInfo(
         character_id=creation.character_id,

@@ -637,6 +637,10 @@ def _get_agent_save_files(agent_name: str) -> list[str]:
             for jsonl_file in glob.glob(f"{raw_dir}/*.jsonl"):
                 files.append(jsonl_file)
 
+        world_schedule_path = character_path("narrator", "world_schedule.json")
+        if os.path.exists(world_schedule_path):
+            files.append(world_schedule_path)
+
     return files
 
 

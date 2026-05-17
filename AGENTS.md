@@ -107,6 +107,7 @@ server.py        ← all
 
 - `data/runtime/characters/last_choices.json`: Latest set of player options, restored on load, cleared on reset
 - `data/runtime/characters/.turn_counter.json`: Global narrator-turn counter, incremented by 1 for each narrator message; a turn starts with one narrator message and continues through character responses plus the next player input, until the following narrator message starts a new turn. Raw JSONL and `memory_draft.jsonl` entries carry turn numbers for `EpisodeClosureDetector` closure detection; reset clears with characters directory, and the opening narrator message writes the first turn
+- `data/runtime/characters/narrator/world_schedule.json`: Narrator-owned world event calendar; `state_updater` reads `events[].status` to push pending public school/world events by date and story phase, and runtime marks triggered world events as `status="triggered"`; can be replaced wholesale by `world_schedule_update` when the story moves to a new environment
 - `data/runtime/characters/narrator/tasks.md`: Optional story seed file; current main flow primarily syncs "Pending Events" from character "Intentions" via `state_updater`
 - `data/runtime/characters/*/.history_window_state.json`: Per-agent dialogue history high/low water mark window sidecar
 - `data/runtime/characters/*/.consolidation_state.json`: Character memory consolidation progress sidecar
@@ -152,9 +153,9 @@ Launch three post-response lines together:
   ↓
 Emit `response_done` so the UI can re-enable free input while those lines continue
   ↓
-state_updater inputs in order: `schedule_snapshot` (renders each character's schedule default location by current game_time, missing schedule marked "(no schedule)"), latest_scene_json, character_intention, current_narrator_status, recent_history
+state_updater inputs in order: characters, `world_schedule`, `schedule_snapshot` (renders each character's schedule default location by current game_time, missing schedule marked "(no schedule)"), latest_scene_json, character_intention, current_narrator_status, recent_history
   ↓
-state_updater outputs full "Character Locations" snapshot each round; priority: latest_scene_json / recent_history facts > character_intention with location > old snapshot > schedule_snapshot defaults
+state_updater outputs full "Character Locations" snapshot each round; priority: latest_scene_json / recent_history facts > character_intention with location > old snapshot > schedule_snapshot defaults. It also maintains "Recent World Event" as a derived narrator status field used to keep current world-event atmosphere and avoid duplicate world-event pushes.
   ↓
 state_updater syncs public "Pending Events" from each character's "Intentions" (event names preserve character names)
 ```
@@ -301,6 +302,7 @@ Save includes:
 - Character `understanding.jsonl` (when present; stable beliefs linked back to EpisodeMemory ids)
 - Character `schedule.json` (when present)
 - Narrator raw history (each entry carries turn number)
+- Narrator `world_schedule.json` when present
 - Per-agent `.history_window_state.json`
 - Character `.consolidation_state.json`
 - `last_choices.json`

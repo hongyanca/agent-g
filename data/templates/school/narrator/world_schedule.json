@@ -1,0 +1,365 @@
+{
+  "title": "校园篇",
+  "events": [
+    {
+      "id": "entrance_ceremony",
+      "month": "4月",
+      "time": "第1周",
+      "phase": "本番",
+      "name": "入学式",
+      "status": "triggered",
+      "summary": "新学期开始",
+      "event": "新生入学，社团招新开始"
+    },
+    {
+      "id": "club_trial_week",
+      "month": "4月",
+      "time": "第2周",
+      "phase": "准备期",
+      "name": "社团体验周",
+      "status": "pending",
+      "summary": "社团招新，新成员加入",
+      "event": "各社团开放活动，新生自由体验"
+    },
+    {
+      "id": "club_joining",
+      "month": "4月",
+      "time": "第3周",
+      "phase": "本番",
+      "name": "社团正式入部",
+      "status": "pending",
+      "summary": "社团正式确定，班级氛围形成",
+      "event": "新生确定归属社团"
+    },
+    {
+      "id": "new_life_settles",
+      "month": "4月",
+      "time": "第4周",
+      "phase": "日常期",
+      "name": "新生活稳定",
+      "status": "pending",
+      "summary": "日常节奏建立",
+      "event": "班级人际关系初步形成"
+    },
+    {
+      "id": "sports_festival_signup",
+      "month": "5月",
+      "time": "第1周",
+      "phase": "准备期",
+      "name": "体育祭报名",
+      "status": "pending",
+      "summary": "体育祭报名",
+      "event": "班级讨论参赛项目，报名开始"
+    },
+    {
+      "id": "sports_festival_practice",
+      "month": "5月",
+      "time": "第2周",
+      "phase": "准备期",
+      "name": "体育祭练习",
+      "status": "pending",
+      "summary": "体育祭准备",
+      "event": "放学后操场练习热火朝天"
+    },
+    {
+      "id": "sports_festival",
+      "month": "5月",
+      "time": "第3周",
+      "phase": "本番",
+      "name": "体育祭本番",
+      "status": "pending",
+      "summary": "体育祭本番",
+      "event": "班级对抗运动会，擅长运动的人变得耀眼"
+    },
+    {
+      "id": "sports_festival_aftermath",
+      "month": "5月",
+      "time": "第4周",
+      "phase": "余波",
+      "name": "体育祭结果",
+      "status": "pending",
+      "summary": "体育祭余波",
+      "event": "比赛结果影响班级气氛，关系重新洗牌"
+    },
+    {
+      "id": "post_sports_daily",
+      "month": "6月",
+      "time": "第1-2周",
+      "phase": "日常期",
+      "name": "日常沉淀",
+      "status": "pending",
+      "summary": "平静的日常",
+      "event": "关系在体育祭后自然发展"
+    },
+    {
+      "id": "culture_festival_theme",
+      "month": "6月",
+      "time": "第3-4周",
+      "phase": "准备期",
+      "name": "文化祭主题讨论",
+      "status": "pending",
+      "summary": "文化祭酝酿",
+      "event": "各班开始讨论出展项目"
+    },
+    {
+      "id": "culture_festival_prep",
+      "month": "7月",
+      "time": "第1周",
+      "phase": "准备期",
+      "name": "文化祭准备",
+      "status": "pending",
+      "summary": "文化祭准备开始",
+      "event": "放学后教室变成手工现场，班级分工确定"
+    },
+    {
+      "id": "culture_festival_sprint",
+      "month": "7月",
+      "time": "第2周",
+      "phase": "准备期",
+      "name": "准备冲刺",
+      "status": "pending",
+      "summary": "文化祭准备冲刺与期末考试预告",
+      "event": "文化祭准备进入倒计时，同时期末考试临近"
+    },
+    {
+      "id": "final_exam",
+      "month": "7月",
+      "time": "第3周",
+      "phase": "本番",
+      "name": "期末考试",
+      "status": "pending",
+      "summary": "期末考试",
+      "event": "考试压力上升，图书馆座位紧张"
+    },
+    {
+      "id": "before_summer_break",
+      "month": "7月",
+      "time": "第4周",
+      "phase": "余波",
+      "name": "暑假前",
+      "status": "pending",
+      "summary": "暑假前",
+      "event": "成绩公布，社团冲刺活动，夏日计划浮出水面"
+    },
+    {
+      "id": "summer_camp",
+      "month": "8月",
+      "time": "第1-2周",
+      "phase": "本番",
+      "name": "暑期合宿",
+      "status": "pending",
+      "summary": "暑期合宿",
+      "event": "社团集中训练，秘密和冲突的爆发期"
+    },
+    {
+      "id": "summer_festival",
+      "month": "8月",
+      "time": "第3周",
+      "phase": "本番",
+      "name": "夏祭花火大会",
+      "status": "pending",
+      "summary": "夏祭",
+      "event": "当地传统活动，夏日约会的天然舞台"
+    },
+    {
+      "id": "late_summer_free_time",
+      "month": "8月",
+      "time": "第4周",
+      "phase": "日常期",
+      "name": "暑假自由期",
+      "status": "pending",
+      "summary": "暑假后半",
+      "event": "自由时间增多，偶遇机会上升"
+    },
+    {
+      "id": "second_term_start",
+      "month": "9月",
+      "time": "第1周",
+      "phase": "准备期",
+      "name": "开学",
+      "status": "pending",
+      "summary": "新学期开始",
+      "event": "文化祭准备最后冲刺"
+    },
+    {
+      "id": "culture_festival",
+      "month": "9月",
+      "time": "第2周",
+      "phase": "本番",
+      "name": "文化祭本番",
+      "status": "pending",
+      "summary": "文化祭本番",
+      "event": "班级出展，告白和误会最容易发生的时期"
+    },
+    {
+      "id": "culture_festival_aftermath",
+      "month": "9月",
+      "time": "第3-4周",
+      "phase": "余波",
+      "name": "文化祭余韵",
+      "status": "pending",
+      "summary": "文化祭余波",
+      "event": "关系变化浮出水面，新的人际格局形成"
+    },
+    {
+      "id": "school_trip_prep",
+      "month": "10月",
+      "time": "第1-2周",
+      "phase": "准备期",
+      "name": "修学旅行准备",
+      "status": "pending",
+      "summary": "修学旅行准备",
+      "event": "分组、住宿安排、自由活动计划"
+    },
+    {
+      "id": "school_trip",
+      "month": "10月",
+      "time": "第3周",
+      "phase": "本番",
+      "name": "修学旅行",
+      "status": "pending",
+      "summary": "修学旅行",
+      "event": "离开日常环境，关系重新洗牌"
+    },
+    {
+      "id": "school_trip_return",
+      "month": "10月",
+      "time": "第4周",
+      "phase": "余波",
+      "name": "旅行归来",
+      "status": "pending",
+      "summary": "归来",
+      "event": "日常恢复，旅行中的变化开始显现"
+    },
+    {
+      "id": "quiet_november",
+      "month": "11月",
+      "time": "第1-2周",
+      "phase": "日常期",
+      "name": "十一月平静期",
+      "status": "pending",
+      "summary": "平静期",
+      "event": "大事件后的平静期"
+    },
+    {
+      "id": "midterm_exam",
+      "month": "11月",
+      "time": "第3-4周",
+      "phase": "本番",
+      "name": "期中考试",
+      "status": "pending",
+      "summary": "期中考试",
+      "event": "学习压力回归"
+    },
+    {
+      "id": "christmas_prep",
+      "month": "12月",
+      "time": "第1-2周",
+      "phase": "准备期",
+      "name": "圣诞活动准备",
+      "status": "pending",
+      "summary": "圣诞准备",
+      "event": "学生会筹备点灯仪式，班级组织小型聚会"
+    },
+    {
+      "id": "christmas_event",
+      "month": "12月",
+      "time": "第3周",
+      "phase": "本番",
+      "name": "圣诞活动",
+      "status": "pending",
+      "summary": "圣诞活动",
+      "event": "点灯仪式，告白和确认关系的时机"
+    },
+    {
+      "id": "year_end",
+      "month": "12月",
+      "time": "第4周",
+      "phase": "余波",
+      "name": "年末",
+      "status": "pending",
+      "summary": "年末",
+      "event": "寒假开始，回顾一年"
+    },
+    {
+      "id": "winter_break",
+      "month": "1月",
+      "time": "第1-2周",
+      "phase": "日常期",
+      "name": "寒假",
+      "status": "pending",
+      "summary": "寒假",
+      "event": "新年，自由时间"
+    },
+    {
+      "id": "third_term",
+      "month": "1月",
+      "time": "第3-4周",
+      "phase": "准备期",
+      "name": "新学期",
+      "status": "pending",
+      "summary": "第三学期开始",
+      "event": "学年最后学期，毕业氛围渐浓"
+    },
+    {
+      "id": "valentine_prep",
+      "month": "2月",
+      "time": "第1周",
+      "phase": "准备期",
+      "name": "情人节准备",
+      "status": "pending",
+      "summary": "情人节准备",
+      "event": "巧克力制作，暧昧关系变得明显"
+    },
+    {
+      "id": "valentine_day",
+      "month": "2月",
+      "time": "第2周",
+      "phase": "本番",
+      "name": "情人节本番",
+      "status": "pending",
+      "summary": "情人节",
+      "event": "隐藏的感情暴露，关系突破的时机"
+    },
+    {
+      "id": "valentine_aftermath",
+      "month": "2月",
+      "time": "第3-4周",
+      "phase": "余波",
+      "name": "情人节余韵",
+      "status": "pending",
+      "summary": "情人节余波",
+      "event": "告白后的回应期，关系重新定义"
+    },
+    {
+      "id": "graduation_prep",
+      "month": "3月",
+      "time": "第1-2周",
+      "phase": "准备期",
+      "name": "毕业式准备",
+      "status": "pending",
+      "summary": "毕业式准备",
+      "event": "告别准备工作，回忆过去一年"
+    },
+    {
+      "id": "graduation",
+      "month": "3月",
+      "time": "第3周",
+      "phase": "本番",
+      "name": "毕业式",
+      "status": "pending",
+      "summary": "毕业式",
+      "event": "前辈离开学校，留下的人面对关系变化"
+    },
+    {
+      "id": "school_year_end",
+      "month": "3月",
+      "time": "第4周",
+      "phase": "余波",
+      "name": "学期终",
+      "status": "pending",
+      "summary": "学期结束",
+      "event": "学年结束，新的开始"
+    }
+  ]
+}

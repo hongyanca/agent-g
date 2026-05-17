@@ -204,179 +204,69 @@ class TestBuildMemoryQueryBuilder:
             },
         ]
 
-    def test_search_query_uses_scene_and_recent_visible_dialogue(self, monkeypatch):
+    def test_episode_query_includes_concern_location_and_input(self, monkeypatch):
         monkeypatch.setattr(
-            query_builder_module,
-            "get_narrative_focus",
-            lambda _agent_name: "美月提起车站和家门口的拒绝",
+            query_builder_module, "get_character_concern", lambda _: "玩家是否真的在乎她的感受"
         )
+        queries = build_retrieval_queries("mitsuki", "我不想再被拒绝", self._raw_messages())
+        assert "玩家是否真的在乎她的感受" in queries.episode
+        assert "一之濑美月家客厅" in queries.episode
+        assert "我不想再被拒绝" in queries.episode
 
-        query = build_retrieval_queries(
-            "mitsuki",
-            "我不想再被拒绝",
-            self._raw_messages(),
-        ).episode
-
-        assert "当前场景" in query
-        assert "一之濑美月家客厅" in query
-        assert "最近对话" in query
-        assert "珍惜身边人" in query
-        assert "家门口的拒绝" in query
-        assert "私密词" not in query
-
-    def test_memory_bm25_query_keeps_high_signal_anchors(self, monkeypatch):
+    def test_bm25_and_understanding_contain_concern_and_input_not_location(self, monkeypatch):
         monkeypatch.setattr(
-            query_builder_module,
-            "get_narrative_focus",
-            lambda _agent_name: "美月想收回车站和家门口那两次拒绝",
+            query_builder_module, "get_character_concern", lambda _: "玩家是否真的在乎她的感受"
         )
+        queries = build_retrieval_queries("mitsuki", "我不想再被拒绝", self._raw_messages())
+        for q in [queries.episode_bm25, queries.understanding, queries.understanding_bm25]:
+            assert "玩家是否真的在乎她的感受" in q
+            assert "我不想再被拒绝" in q
+            assert "一之濑美月家客厅" not in q
 
-        query = build_retrieval_queries(
-            "mitsuki",
-            "可是我还不想这么快做决定",
-            self._raw_messages(),
-        ).episode_bm25
+    def test_location_extracted_from_visible_narrator_message(self, monkeypatch):
+        monkeypatch.setattr(query_builder_module, "get_character_concern", lambda _: "")
+        queries = build_retrieval_queries("mitsuki", "测试输入", self._raw_messages())
+        assert "一之濑美月家客厅" in queries.episode
 
-        assert "我也有夏帆了，我们珍惜身边人" in query
-        assert "北原悠" in query
-        assert "一之濑美月" in query
-        assert "一之濑美月家客厅" in query
-        assert "拒绝" in query
-        assert "私密词" not in query
-        assert "玩家" not in query
-
-    def test_queries_ignore_ambient_present_character_names(self, monkeypatch):
-        monkeypatch.setattr(
-            query_builder_module,
-            "get_narrative_focus",
-            lambda _agent_name: "一之濑美月低声和北原悠约定放学后见面",
-        )
+    def test_invisible_narrator_message_location_ignored(self, monkeypatch):
+        monkeypatch.setattr(query_builder_module, "get_character_concern", lambda _: "")
         raw_messages = [
             {
-                "targets": ["mitsuki"],
-                "date": "4月19日 星期四",
-                "time": "10:08",
-                "location": "城川私立高中高二B班教室",
-                "present_characters": {
-                    "北原悠": "靠窗座位上",
-                    "一之濑美月": "前排座位",
-                    "川上夏帆": "后排和女生轻声聊天",
-                    "森野静": "靠墙座位翻书",
-                },
-                "scene_description": "喧闹的课间还在持续，美月手里的铅笔在笔记本上轻轻划了一道。",
-                "new_characters": [],
                 "role": "narrator",
-                "visible_to": ["mitsuki", "narrator"],
-                "turn": 1,
-            },
-            {
-                "role": "player",
-                "content": "## 北原悠\n不可以想逛街吗？",
-                "visible_to": ["mitsuki", "narrator"],
+                "location": "秘密地点",
+                "scene_description": "...",
+                "new_characters": [],
+                "targets": ["shizuka"],
+                "visible_to": ["shizuka", "narrator"],
                 "turn": 1,
             },
         ]
+        queries = build_retrieval_queries("mitsuki", "测试输入", raw_messages)
+        assert "秘密地点" not in queries.episode
 
-        queries = build_retrieval_queries("mitsuki", "不可以想逛街吗？", raw_messages)
+    def test_fallback_to_user_input_when_concern_empty_and_no_location(self, monkeypatch):
+        monkeypatch.setattr(query_builder_module, "get_character_concern", lambda _: "")
+        queries = build_retrieval_queries("mitsuki", "我还需要时间", [])
+        assert queries.episode == "我还需要时间"
+        assert queries.episode_bm25 == "我还需要时间"
+        assert queries.understanding == "我还需要时间"
+        assert queries.understanding_bm25 == "我还需要时间"
 
-        assert "城川私立高中高二B班教室" in queries.episode
-        assert "喧闹的课间" in queries.episode
-        assert "川上夏帆" not in queries.episode
-        assert "川上夏帆" not in queries.episode_bm25
-        assert "川上夏帆" not in queries.understanding
-        assert "川上夏帆" not in queries.understanding_bm25
+    def test_user_input_appears_exactly_once(self, monkeypatch):
+        monkeypatch.setattr(query_builder_module, "get_character_concern", lambda _: "某种在意的事")
+        queries = build_retrieval_queries("mitsuki", "这句话只出现一次", self._raw_messages())
+        assert queries.episode.count("这句话只出现一次") == 1
+        assert queries.episode_bm25.count("这句话只出现一次") == 1
+        assert queries.understanding.count("这句话只出现一次") == 1
+        assert queries.understanding_bm25.count("这句话只出现一次") == 1
 
-    def test_episode_query_uses_player_message_from_history_once(self, monkeypatch):
-        monkeypatch.setattr(
-            query_builder_module,
-            "get_narrative_focus",
-            lambda _agent_name: "美月拉着北原悠往楼梯口走去",
-        )
-        raw_messages = [
-            {
-                "targets": ["mitsuki"],
-                "date": "4月19日 星期四",
-                "time": "10:16",
-                "location": "教学楼走廊，楼梯口旁",
-                "scene_description": "美月的手微微一紧，随即稍稍松开了一点力道。",
-                "new_characters": [],
-                "role": "narrator",
-                "visible_to": ["mitsuki", "narrator"],
-                "turn": 10,
-            },
-            {
-                "role": "mitsuki",
-                "content": "## 一之濑美月\n（轻轻扯住他的袖口）等她走过去我们再走。",
-                "visible_to": ["mitsuki", "narrator"],
-                "turn": 10,
-            },
-            {
-                "role": "player",
-                "content": "## 北原悠\n这样拉着我，等下碰到森野了怎么办",
-                "visible_to": ["mitsuki", "narrator"],
-                "turn": 10,
-            },
-        ]
-
-        queries = build_retrieval_queries(
-            "mitsuki",
-            "这样拉着我，等下碰到森野了怎么办",
-            raw_messages,
-        )
-
-        assert queries.episode.count("这样拉着我，等下碰到森野了怎么办") == 1
-        assert queries.episode_bm25.count("这样拉着我，等下碰到森野了怎么办") == 1
-        assert queries.understanding.count("这样拉着我，等下碰到森野了怎么办") == 1
-        assert queries.understanding_bm25.count("这样拉着我，等下碰到森野了怎么办") == 1
-        assert "玩家新消息" not in queries.episode
-        assert "当前互动" not in queries.understanding
-        assert "当前互动" not in queries.understanding_bm25
-        assert "近期可见对话" not in queries.understanding_bm25
-        assert "玩家: ## 北原悠" in queries.episode
-
-    def test_understanding_query_uses_relation_context_not_focus_only(self, monkeypatch):
-        monkeypatch.setattr(
-            query_builder_module,
-            "get_narrative_focus",
-            lambda _agent_name: "美月想收回车站和家门口那两次拒绝",
-        )
-
-        queries = build_retrieval_queries(
-            "mitsuki",
-            "可是我还不想这么快做决定",
-            self._raw_messages(),
-        )
-
-        assert "关系/行为焦点" in queries.understanding
-        assert "近期可见对话" in queries.understanding
-        assert "珍惜身边人" in queries.understanding
-        assert "关系/行为焦点" not in queries.understanding_bm25
-        assert "近期可见对话" not in queries.understanding_bm25
-        assert "珍惜身边人" in queries.understanding_bm25
+    def test_invisible_player_message_not_in_queries(self, monkeypatch):
+        monkeypatch.setattr(query_builder_module, "get_character_concern", lambda _: "")
+        queries = build_retrieval_queries("mitsuki", "当前输入", self._raw_messages())
+        assert "私密词" not in queries.episode
+        assert "私密词" not in queries.episode_bm25
         assert "私密词" not in queries.understanding
         assert "私密词" not in queries.understanding_bm25
-
-    def test_queries_keep_dialogue_when_no_scene_message(self, monkeypatch):
-        monkeypatch.setattr(
-            query_builder_module,
-            "get_narrative_focus",
-            lambda _agent_name: "",
-        )
-        raw_messages = [
-            {
-                "role": "player",
-                "content": "## 北原悠\n我害怕再次被拒绝",
-                "visible_to": ["mitsuki", "narrator"],
-                "turn": 1,
-            },
-        ]
-
-        queries = build_retrieval_queries("mitsuki", "我还需要时间", raw_messages)
-
-        assert "我害怕再次被拒绝" in queries.episode
-        assert "我害怕再次被拒绝" in queries.episode_bm25
-        assert "我害怕再次被拒绝" in queries.understanding
-        assert "我害怕再次被拒绝" in queries.understanding_bm25
 
 
 class TestHighLowWatermarkHelper:

@@ -568,7 +568,6 @@ async def test_chat_stream_emits_created_character_identity(monkeypatch):
             new_characters=[
                 {
                     "name_hint": "桥本志津",
-                    "relation_to": "alice",
                     "relation_description": "Alice 的家人",
                 }
             ],

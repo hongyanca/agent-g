@@ -6,6 +6,8 @@ from agents.schema import (
     ChoicesOutput,
     EpisodeMemoryBlock,
     NarratorOutput,
+    NarratorStatus,
+    StateUpdaterOutput,
     UnderstandingPatchOutput,
 )
 from conftest import _narrator_output
@@ -34,14 +36,13 @@ def test_narrator_output_allows_new_character_without_existing_target():
         scene_description="门外有人停下脚步。",
         new_characters=[
             {
-                "relation_to": "player",
                 "relation_description": "玩家刚认识的邻班学生",
             }
         ],
     )
 
     assert output.targets == []
-    assert output.new_characters[0].relation_to == "player"
+    assert output.new_characters[0].relation_description == "玩家刚认识的邻班学生"
 
 
 def test_episode_memory_block_cleans_keywords_and_clamps_importance():
@@ -99,6 +100,22 @@ def test_understanding_entry_strips_string_fields():
     entry = output.add[0]
     assert entry.subject == "对玩家的认知"
     assert entry.content == "玩家会主动解释误会。"
+
+
+def test_state_updater_output_accepts_world_schedule_fields():
+    default_output = StateUpdaterOutput()
+    assert default_output.status.最近世界事件 == ""
+    assert default_output.world_schedule_update == ""
+    assert default_output.triggered_world_events == []
+
+    output = StateUpdaterOutput(
+        status=NarratorStatus(最近世界事件="（准备期）文化祭准备中"),
+        world_schedule_update='{"events":[]}',
+        triggered_world_events=["文化祭主题讨论"],
+    )
+    assert output.status.最近世界事件 == "（准备期）文化祭准备中"
+    assert output.world_schedule_update == '{"events":[]}'
+    assert output.triggered_world_events == ["文化祭主题讨论"]
 
 
 def test_understanding_update_allows_subject_only_entry():

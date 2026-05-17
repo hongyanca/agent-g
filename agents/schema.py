@@ -36,13 +36,13 @@ class NarratorStatus(BaseModel):
     角色位置: str = ""
     当前时间: str = ""
     叙事焦点: str = ""
+    最近世界事件: str = ""
 
 
 class NewCharacterRequest(BaseModel):
     """上游请求动态生成新角色时的最小锚点。"""
 
     name_hint: str = ""
-    relation_to: str
     relation_description: str
     background_hint: str = ""
     initial_location: str = ""
@@ -150,6 +150,8 @@ class StateUpdaterOutput(BaseModel):
     status: NarratorStatus = Field(default_factory=NarratorStatus)
     triggered: list[str] = Field(default_factory=list)
     add_event: list[str] = Field(default_factory=list)
+    world_schedule_update: str = ""
+    triggered_world_events: list[str] = Field(default_factory=list)
 
 
 class ChoicesOutput(BaseModel):

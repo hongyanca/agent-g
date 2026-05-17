@@ -1,6 +1,7 @@
 """测试 narrator 路径的回退和内容清洗。"""
 
 import asyncio
+import json
 import os
 from pathlib import Path
 
@@ -220,13 +221,12 @@ def test_narrator_route_validation_rejects_invalid_new_character_anchor():
         new_characters=[
             {
                 "name_hint": "桥本志津",
-                "relation_to": "ghost",
-                "relation_description": "美月的妈妈",
+                "relation_description": "",
             }
         ],
     )
 
-    with pytest.raises(ValueError, match="invalid relation_to"):
+    with pytest.raises(ValueError, match="missing relation_description"):
         Narrator._validate_route_output(output, ["mitsuki"])
 
 
@@ -275,7 +275,6 @@ async def test_narrator_route_allows_spawn_without_existing_targets(monkeypatch)
             new_characters=[
                 {
                     "name_hint": "桥本志津",
-                    "relation_to": "mitsuki",
                     "relation_description": "美月的妈妈",
                 }
             ],
@@ -335,6 +334,11 @@ def test_state_updater_output_writes_narrator_status_and_events(monkeypatch):
         "add_pending_event",
         lambda agent, event, section: calls.append(("add_event", agent, event, section)) or {},
     )
+    monkeypatch.setattr(
+        character_module,
+        "update_status_allow_new_field",
+        lambda agent, field, content: calls.append(("derived_status", agent, field, content)) or {},
+    )
 
     output = StateUpdaterOutput(
         status=NarratorStatus(
@@ -351,6 +355,7 @@ def test_state_updater_output_writes_narrator_status_and_events(monkeypatch):
     assert ("status", "narrator", "场景", "餐厅") in calls
     assert ("status", "narrator", "角色位置", "- 玩家：餐桌旁") in calls
     assert ("status", "narrator", "当前时间", "10月24日 08:40") in calls
+    assert ("derived_status", "narrator", "最近世界事件", "") not in calls
     assert ("triggered", "narrator", "角色B来电", "待触发事件") in calls
     assert (
         "add_event",
@@ -358,6 +363,59 @@ def test_state_updater_output_writes_narrator_status_and_events(monkeypatch):
         "【楼下碰面】10月24日 09:30 角色B到达公寓楼下",
         "待触发事件",
     ) in calls
+
+
+def test_state_updater_updates_recent_world_event_and_marks_schedule(monkeypatch):
+    derived_status: list[tuple[str, str, str]] = []
+    written: list[tuple] = []
+    schedule = {
+        "events": [
+            {
+                "name": "体育祭报名",
+                "phase": "准备期",
+                "status": "pending",
+            }
+        ]
+    }
+
+    monkeypatch.setattr(
+        character_module,
+        "update_status_allow_new_field",
+        lambda agent, field, content: derived_status.append((agent, field, content)) or {},
+    )
+    monkeypatch.setattr(
+        character_module,
+        "read_sidecar_json",
+        lambda agent, filename: schedule
+        if (agent, filename) == ("narrator", "world_schedule.json")
+        else {},
+    )
+    monkeypatch.setattr(
+        character_module,
+        "write_sidecar_json",
+        lambda agent, filename, data: written.append((agent, filename, data)),
+    )
+    monkeypatch.setattr(character_module.Narrator, "add_event", lambda *_args: None)
+
+    output = StateUpdaterOutput(
+        status=NarratorStatus(
+            最近世界事件="（准备期）体育祭报名周，告示板上贴出了体育祭的海报",
+        ),
+        add_event=["【世界事件：体育祭报名】5月第1周 各班教室。班长宣布报名开始。"],
+        triggered_world_events=["体育祭报名"],
+    )
+
+    Narrator()._apply_state_updates(output)
+
+    assert derived_status == [
+        (
+            "narrator",
+            "最近世界事件",
+            "（准备期）体育祭报名周，告示板上贴出了体育祭的海报",
+        )
+    ]
+    assert written[0][0:2] == ("narrator", "world_schedule.json")
+    assert written[0][2]["events"][0]["status"] == "triggered"
 
 
 @pytest.mark.asyncio
@@ -547,6 +605,7 @@ async def test_narrator_update_state_uses_state_updater_agent(monkeypatch):
     assert captured["usage_agent"] == "state_updater"
     assert history_calls == [{"limit": None, "turns": 1}]
     user_input = captured["user_input"]
+    assert "<world_event_state>" not in user_input
     assert user_input.index("<character_intention>") < user_input.index("<current_narrator_status>")
     assert user_input.index("<current_narrator_status>") < user_input.index("<recent_history>")
     assert "玩家: 更早的问题" not in user_input

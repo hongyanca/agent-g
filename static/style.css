@@ -3383,7 +3383,7 @@ svg {
   }
 
   .beat-time {
-    display: none;
+    font-size: 11px;
   }
 
   .message-card {
@@ -3409,7 +3409,6 @@ svg {
     text-align: left;
   }
 
-  .composer-head,
   .composer-foot {
     display: none;
   }
