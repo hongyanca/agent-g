@@ -611,15 +611,11 @@ class VectorStore:
             )
             return 0
 
-    async def add(
+    async def add_episode(
         self,
         episode: EpisodeMemory,
     ) -> None:
-        """将单条 EpisodeMemory 追加写入向量库。
-
-        Args:
-            episode: 待插入的长期记忆事件
-        """
+        """将单条 EpisodeMemory 追加写入向量库。"""
         prepared = self._prepare_episode_index(episode)
         if prepared is None:
             return
@@ -641,7 +637,7 @@ class VectorStore:
                 prepared.memory_owner, prepared.date,
             )
 
-    async def add_many(
+    async def add_episodes(
         self,
         episodes: list[EpisodeMemory],
         *,
@@ -690,86 +686,137 @@ class VectorStore:
 
     # ----------------------------- Understanding 写入 -----------------------------
 
+    async def _insert_understanding_batch(
+        self,
+        items: list[tuple[object, list[float]]],
+        embedding_dim: int,
+    ) -> int:
+        """在单个事务内写入一批已完成 embedding 的 Understanding 记录，返回写入条数。
+
+        ROLLBACK 在 write_lock 内执行，不会与并发协程的事务相互干扰。
+        """
+        async with self._get_write_lock():
+            await self._create_schema(embedding_dim)
+            db = await self._get_db()
+            await db.execute("BEGIN")
+            try:
+                count = 0
+                for u, embedding in items:
+                    uid: str = getattr(u, "id", "")
+                    subject: str = getattr(u, "subject", "")
+                    content: str = getattr(u, "content", "")
+                    memory_owner: str = getattr(u, "memory_owner", "")
+                    keywords_str = "、".join(getattr(u, "keywords", []))
+                    linked_str = json.dumps(getattr(u, "linked_episodes", []), ensure_ascii=False)
+
+                    existing = await (
+                        await db.execute("SELECT db_id FROM Understanding WHERE id = ?", (uid,))
+                    ).fetchone()
+                    if existing:
+                        old_db_id: int = existing[0]
+                        await db.execute("DELETE FROM Understanding_fts WHERE rowid = ?", (old_db_id,))
+                        await db.execute("DELETE FROM Understanding_vec WHERE rowid = ?", (old_db_id,))
+
+                    cur = await db.execute(
+                        "INSERT OR REPLACE INTO Understanding"
+                        "(id, memory_owner, subject, content, keywords, linked_episodes) "
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                        (uid, memory_owner, subject, content, keywords_str, linked_str),
+                    )
+                    db_id = int(cur.lastrowid or 0)
+                    if db_id:
+                        await db.execute(
+                            "INSERT OR REPLACE INTO Understanding_vec(rowid, embedding) VALUES (?, ?)",
+                            (db_id, self._to_vec_blob(embedding)),
+                        )
+                        await db.execute(
+                            "INSERT OR REPLACE INTO Understanding_fts(rowid, subject, keywords) VALUES (?, ?, ?)",
+                            (db_id, _tokenize_for_fts(subject), _tokenize_for_fts(keywords_str)),
+                        )
+                        count += 1
+                await db.commit()
+                return count
+            except Exception:
+                try:
+                    await db.execute("ROLLBACK")
+                except Exception:
+                    pass
+                raise
+
     async def add_understanding(self, understanding: object) -> None:
         """将单条 Understanding 写入向量库（已存在时先删后插）。"""
         uid: str = getattr(understanding, "id", "")
         if not uid:
             return
-
         embed_text = self._understanding_embed_text(understanding)
         if not embed_text.strip():
             return
         try:
             embedding = (await embed_async([embed_text]))[0]
         except Exception as e:
-            memory_logger.error(
-                "[VectorStore] Understanding embedding 失败: id=%s, error=%s",
-                uid, e,
-            )
+            memory_logger.error("[VectorStore] Understanding embedding 失败: id=%s, error=%s", uid, e)
             return
-
-        keywords_str = "、".join(getattr(understanding, "keywords", []))
-        linked_str = json.dumps(
-            getattr(understanding, "linked_episodes", []), ensure_ascii=False
-        )
-        memory_owner: str = getattr(understanding, "memory_owner", "")
-        subject: str = getattr(understanding, "subject", "")
-        content: str = getattr(understanding, "content", "")
-
-        async with self._get_write_lock():
-            await self._create_schema(len(embedding))
-            db = await self._get_db()
-            try:
-                await db.execute("BEGIN")
-                existing = await (
-                    await db.execute(
-                        "SELECT db_id FROM Understanding WHERE id = ?", (uid,)
-                    )
-                ).fetchone()
-                if existing:
-                    old_db_id: int = existing[0]
-                    await db.execute(
-                        "DELETE FROM Understanding_fts WHERE rowid = ?", (old_db_id,)
-                    )
-                    await db.execute(
-                        "DELETE FROM Understanding_vec WHERE rowid = ?", (old_db_id,)
-                    )
-                cur = await db.execute(
-                    "INSERT OR REPLACE INTO Understanding"
-                    "(id, memory_owner, subject, content, keywords, linked_episodes) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (uid, memory_owner, subject, content, keywords_str, linked_str),
-                )
-                db_id = int(cur.lastrowid or 0)
-                if db_id:
-                    await db.execute(
-                        "INSERT OR REPLACE INTO Understanding_vec(rowid, embedding) "
-                        "VALUES (?, ?)",
-                        (db_id, self._to_vec_blob(embedding)),
-                    )
-                    await db.execute(
-                        "INSERT OR REPLACE INTO Understanding_fts"
-                        "(rowid, subject, keywords) VALUES (?, ?, ?)",
-                        (
-                            db_id,
-                            _tokenize_for_fts(subject),
-                            _tokenize_for_fts(keywords_str),
-                        ),
-                    )
-                await db.commit()
+        try:
+            inserted = await self._insert_understanding_batch([(understanding, embedding)], len(embedding))
+            if inserted:
                 memory_logger.debug(
                     "[VectorStore] Understanding 写入完成: id=%s, owner=%s",
-                    uid, memory_owner,
+                    uid, getattr(understanding, "memory_owner", ""),
+                )
+        except Exception as e:
+            memory_logger.error("[VectorStore] Understanding 写入失败: id=%s, error=%s", uid, e)
+
+    async def add_understandings(
+        self,
+        understandings: list[object],
+        *,
+        batch_size: int = 64,
+    ) -> int:
+        """批量写入 Understanding 向量库，返回成功写入的记录数。"""
+        items: list[tuple[object, str]] = []
+        for u in understandings:
+            if not getattr(u, "id", ""):
+                continue
+            text = self._understanding_embed_text(u)
+            if text.strip():
+                items.append((u, text))
+        if not items:
+            return 0
+
+        inserted_total = 0
+        for start in range(0, len(items), batch_size):
+            batch = items[start : start + batch_size]
+            try:
+                embeddings = await embed_async([text for _, text in batch])
+            except Exception as e:
+                memory_logger.error(
+                    "[VectorStore] Understanding 批量 embedding 失败: count=%s, error=%s",
+                    len(batch), e,
+                )
+                continue
+            if len(embeddings) != len(batch):
+                memory_logger.error(
+                    "[VectorStore] Understanding 批量 embedding 数量不匹配: expected=%s, got=%s",
+                    len(batch), len(embeddings),
+                )
+                continue
+            try:
+                embedding_dim = self._embedding_dim(embeddings)
+                inserted_total += await self._insert_understanding_batch(
+                    [(u, emb) for (u, _), emb in zip(batch, embeddings)],
+                    embedding_dim,
                 )
             except Exception as e:
-                try:
-                    await db.execute("ROLLBACK")
-                except Exception:
-                    pass
                 memory_logger.error(
-                    "[VectorStore] Understanding 写入失败: id=%s, error=%s",
-                    uid, e,
+                    "[VectorStore] Understanding 批量写入失败: count=%s, error=%s",
+                    len(batch), e,
                 )
+
+        memory_logger.info(
+            "[VectorStore] Understanding 批量索引完成: requested=%s, inserted=%s",
+            len(items), inserted_total,
+        )
+        return inserted_total
 
     async def update_understanding_links(
         self, understanding_id: str, linked_episodes: list[str]

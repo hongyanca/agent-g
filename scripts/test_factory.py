@@ -22,8 +22,7 @@ from shared.config import AGENT_RUN_TIMEOUT_SECONDS
 
 # 与原始 trace 完全一致的输入
 USER_INPUT = """<spec>
-relation_description: 北原悠的姐姐，比悠年长几岁，在同城工作或上学。
-background_hint: 接到电话后正在赶来，语气里带着担心但克制。
+background_hint: 北原悠的姐姐，比悠年长几岁，在同城上大学。接到电话后语气带着担心但克制，平时独立、很少让别人看出自己慌了。
 name_hint: 北原栞
 initial_location: 正在前往综合医院的路上
 </spec>
@@ -119,13 +118,6 @@ async def main():
     print()
     print("--- initial_status ---")
     print(json.dumps(result.initial_status, ensure_ascii=False, indent=2))
-    if result.schedule and result.schedule.periods:
-        print()
-        print("--- schedule ---")
-        for p in result.schedule.periods:
-            print(f"  {p.name}: {p.start} ~ {p.end}")
-            for s in p.slots[:3]:
-                print(f"    {s.days} {s.time} → {s.location}")
 
 
 if __name__ == "__main__":

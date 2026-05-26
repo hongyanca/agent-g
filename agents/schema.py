@@ -1,6 +1,6 @@
 """所有 Agent 的结构化输出类型（对话 + 记忆整理）。"""
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import (
     AliasChoices,
@@ -43,8 +43,7 @@ class NewCharacterRequest(BaseModel):
     """上游请求动态生成新角色时的最小锚点。"""
 
     name_hint: str = ""
-    relation_description: str
-    background_hint: str = ""
+    background_hint: str
     initial_location: str = ""
 
 
@@ -92,41 +91,38 @@ class NewCharacterProfile(BaseModel):
 
     character_id 由 character_factory 生成，是最终目录名 / agent 标识。
     display_name 是最终展示名，会写入 soul.md / status.md。
-    soul 分成五段（identity / goal / dynamic / behavior / voice），和模板对齐。
-
-    schedule 是新角色的默认日程（可空），用于 state_updater 的 schedule_snapshot 兜底。
+    soul 分成六段（identity / goal / past / habits / reactions / voice），和模板对齐。
     """
 
     character_id: str = Field(validation_alias=AliasChoices("character_id", "agent_id"))
     display_name: str
     identity: str
     goal: str
-    dynamic: str
-    behavior: list[str] = Field(default_factory=list)
+    past: list[str] = Field(default_factory=list)
+    habits: list[str] = Field(default_factory=list)
+    reactions: list[str] = Field(default_factory=list)
     voice: list[str] = Field(default_factory=list)
     initial_status: dict[str, str] = Field(default_factory=dict)
-    schedule: "CharacterSchedule | None" = None
 
     @field_validator(
         "character_id",
         "display_name",
         "identity",
         "goal",
-        "dynamic",
         mode="before",
     )
     @classmethod
     def trim_creation_fields(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
-    @field_validator("behavior", "voice", mode="before")
+    @field_validator("past", "habits", "reactions", "voice", mode="before")
     @classmethod
     def trim_list_items(cls, value: object) -> object:
         if not isinstance(value, list):
             return value
         return [item.strip() if isinstance(item, str) else item for item in value]
 
-    @field_validator("character_id", "display_name", "identity", "goal", "dynamic")
+    @field_validator("character_id", "display_name", "identity", "goal")
     @classmethod
     def ensure_creation_fields_not_empty(cls, value: str) -> str:
         if not value:
@@ -254,31 +250,3 @@ class UnderstandingPatchOutput(BaseModel):
         return _strip_dict_keys(value)
 
 
-# ---------------------------------------------------------------------------
-# 世界调度（schedule.json）
-# ---------------------------------------------------------------------------
-
-
-Weekday = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-TimeBucket = Literal["上午", "下午", "晚上", "全天"]
-
-
-class CharacterScheduleSlot(BaseModel):
-    days: list[Weekday]
-    time: TimeBucket
-    location: str
-
-
-class CharacterSchedulePeriod(BaseModel):
-    start: str
-    end: str
-    name: str = ""
-    slots: list[CharacterScheduleSlot] = Field(default_factory=list)
-
-
-class CharacterSchedule(BaseModel):
-    periods: list[CharacterSchedulePeriod] = Field(default_factory=list)
-
-
-# 解析 NewCharacterProfile 中对 CharacterSchedule 的前向引用
-NewCharacterProfile.model_rebuild()

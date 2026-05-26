@@ -580,15 +580,13 @@ async def import_save_archive(save_filename: str) -> bool:
             await vector_store.delete_all_agents(agents_to_clear)
         log_step(f"清理向量记忆（{len(agents_to_clear)} 个角色）")
 
-        print("[读档] 重建向量库...", flush=True)
-        from memory.indexer import rebuild_memory_index
-        await rebuild_memory_index(clear_existing=False)
-        log_step("重建向量库")
-
-        print("[读档] 重建 Understanding 向量库...", flush=True)
-        from memory.indexer import rebuild_understanding_index
-        await rebuild_understanding_index()
-        log_step("重建 Understanding 向量库")
+        print("[读档] 并发重建向量库...", flush=True)
+        from memory.indexer import rebuild_memory_index, rebuild_understanding_index
+        await asyncio.gather(
+            rebuild_memory_index(clear_existing=False),
+            rebuild_understanding_index(),
+        )
+        log_step("重建向量库（EpisodeMemory + Understanding）")
 
         print(f"[读档] 读档完成: {save_filename}", flush=True)
         return True
@@ -613,7 +611,7 @@ def _get_agent_save_files(agent_name: str) -> list[str]:
     core_files = ["soul.md", "status.md"]
     if agent_name != "narrator":
         core_files.extend([
-            "memory.jsonl", "memory_draft.jsonl", "understanding.jsonl", "schedule.json",
+            "memory.jsonl", "memory_draft.jsonl", "understanding.jsonl",
         ])
 
     for filename in core_files:

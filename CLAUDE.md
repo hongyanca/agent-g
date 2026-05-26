@@ -31,13 +31,11 @@ agentgal-memos/
 │   ├── character.py            # Character / Narrator runtime wrapper and typed output writeback
 │   ├── character_factory.py    # New character incubation
 │   ├── conversation_flow.py    # Single-round dialogue orchestration and UI adapter functions
-│   └── prompt_builder.py       # Dialogue prompt / history window / schedule snapshot construction
+│   └── prompt_builder.py       # Dialogue prompt / history window construction
 ├── agents/                     # SDK infrastructure (technical support layer)
 │   ├── factory.py              # Agent creation, registry, and SDK model configuration
 │   ├── runner.py               # SDK Runner invocation, Logfire trace, and typed parse
 │   └── schema.py               # Pydantic structured output types
-├── world/                      # World model (time / location)
-│   └── schedule.py             # Character schedule queries, game time parsing, time-slot matching
 ├── consolidation/              # Background memory consolidation (independent process)
 │   ├── flow.py                 # Consolidation orchestration: EpisodeMemoryGenerator / understanding patch
 │   └── inputs.py               # Consolidation prompt assembly (memory_owner / raw_dialogue)
@@ -81,9 +79,8 @@ storage/         ← shared/
 llm/             ← shared/
 agents/          ← shared/                            # SDK base layer
 memory/          ← shared/ + storage/ + llm/
-world/           ← shared/ + storage/ + agents/
 consolidation/   ← shared/ + storage/ + agents/ + memory/ + llm/
-engine/          ← shared/ + storage/ + agents/ + memory/ + world/ + consolidation/
+engine/          ← shared/ + storage/ + agents/ + memory/ + consolidation/
 server.py        ← all
 ```
 
@@ -91,7 +88,7 @@ server.py        ← all
 
 ### Character Files
 
-- `soul.md`: Handwritten character definition, read-only; divided into five sections: `<identity>` / `<goal>` / `<dynamic>` / `<behavior>` / `<voice>`. The `<goal>` section describes the character's concrete long-term objectives for the story period (externally verifiable milestones + optional relationship vision), largely unchanged throughout the story period
+- `soul.md`: Handwritten character definition, read-only; divided into six sections: `<identity>` / `<goal>` / `<past>` / `<habits>` / `<reactions>` / `<voice>`. The `<goal>` section describes the character's concrete long-term objectives for the story period (externally verifiable milestones + optional relationship vision), largely unchanged throughout the story period
 - `memory.jsonl`: Character long-term memory, one structured `EpisodeMemory` per line (`id / date / time / location / participants / keywords / importance / content / memory_owner / title / raw_dialogue / last_recalled_at`), append-only, characters only; `id` is a stable UUID, `last_recalled_at` defaults to the event date and is refreshed from SQLite into saved archives, and old data can be backfilled with `scripts/backfill_episode_ids.py`
 - `memory_draft.jsonl`: On-disk buffer for each round's `output.memory` (characters only), each line is `{"turn": int, "text": str}`; after consolidation's `EpisodeClosureDetector` determines closure, slices are read by `until_turn` to produce structured `EpisodeMemory` appended to `memory.jsonl`. Merged entries are removed from draft; unclosed turn entries are retained
 - `understanding.jsonl`: Stable understandings formed by the character, one structured `Understanding` per line (`id / memory_owner / subject / keywords / content / linked_episodes / history`); unlike `EpisodeMemory`, this records durable beliefs or interaction patterns rather than single events. `history` belongs to that single Understanding and records the initial version plus content-changing updates as `{episode_id / date / title / content}`; link-only evidence updates do not append history entries
@@ -138,7 +135,7 @@ User Message
   ↓
 Invoke narrator, get NarratorOutput (targets + date + time + location + present_characters + scene_description + new_characters)
   ↓
-Incubate new_characters: `character_factory` generates `character_id`, writes soul/status/memory + `schedule.json` (skipped if LLM does not produce); successfully incubated new characters enter this round's final response list
+Incubate new_characters: `character_factory` generates `character_id`, writes soul/status/memory; successfully incubated new characters enter this round's final response list
   ↓
 Write structured narrator output to single raw history (with visible_to)
   ↓
@@ -153,11 +150,11 @@ Launch three post-response lines together:
   ↓
 Emit `response_done` so the UI can re-enable free input while those lines continue
   ↓
-state_updater inputs in order: characters, `world_schedule`, `schedule_snapshot` (renders each character's schedule default location by current game_time, missing schedule marked "(no schedule)"), latest_scene_json, character_intention, current_narrator_status, recent_history
+state_updater inputs in order: `characters_status` (身份/心境/在意的事/打算 per character), `world_schedule`, latest_scene_json, current_narrator_status, recent_history
   ↓
-state_updater outputs full "Character Locations" snapshot each round; priority: latest_scene_json / recent_history facts > character_intention with location > old snapshot > schedule_snapshot defaults. It also maintains "Recent World Event" as a derived narrator status field used to keep current world-event atmosphere and avoid duplicate world-event pushes.
+state_updater outputs full "Character Locations" snapshot each round; priority: latest_scene_json / recent_history facts > characters_status with location > old snapshot > reasonable inference. It also maintains "Recent World Event" as a derived narrator status field used to keep current world-event atmosphere and avoid duplicate world-event pushes.
   ↓
-state_updater syncs public "Pending Events" from each character's "Intentions" (event names preserve character names)
+state_updater syncs public "Pending Events" from each character's "打算" (event names preserve character names); when recent dialogue is too mundane, derives an irreversible plot event from character's 身份+心境+在意的事, optionally using a world_schedule event as a vessel
 ```
 
 Observation mode uses the same SSE chat endpoint with `mode="observe"`: the narrator runs with the observation prompt, the player message is not written to raw history, selected characters respond to the narrator scene, choices are cleared instead of generated, and state update / consolidation still run after the round.
@@ -207,12 +204,11 @@ Where:
 
 `user` message is assembled into a **single large message** in the following order:
 
-1. `<my_schedule>` (renders character's `schedule.json`; most stable throughout the story period, placed first to anchor prompt cache)
-2. Recent visible dialogue history (built from raw JSONL; filtered by `visible_to`; high/low water mark truncation; history contains all narrator messages)
-3. `status.md`
-4. `<relevant_memories>` (long-term memory recall from `memory.jsonl`, vector store side still renders as markdown for LLM reading)
-5. `<relevant_understandings>` (stable understanding recall from `understanding.jsonl`; relevance-only ranking, no recency or recall-state update)
-6. Current round player input
+1. Recent visible dialogue history (built from raw JSONL; filtered by `visible_to`; high/low water mark truncation; history contains all narrator messages)
+2. `status.md`
+3. `<relevant_memories>` (long-term memory recall from `memory.jsonl`, vector store side still renders as markdown for LLM reading)
+4. `<relevant_understandings>` (stable understanding recall from `understanding.jsonl`; relevance-only ranking, no recency or recall-state update)
+5. Current round player input
 
 ### Narrator Agent
 
@@ -230,7 +226,7 @@ Where:
 
 `narrator` does not use vector recall; it relies on scene, narrative focus, pending events, and "Relationship with Player" in `status.md` to advance the current round. Pending events are primarily synced by `state_updater` from character "Intentions", event names preserve character names (e.g. `【Mitsuki: Promise to Walk Together】`). "Relationship with Player" is summarized from each character's status by code, format `- Mitsuki: Lover`.
 
-> Note: `<world_now>` (derived projection of current time / real-time character locations) is currently disabled, to be restored after schedule mechanism is refined. During this period narrator only reads fields maintained by author/state_updater in `status.md`.
+> Note: `<world_now>` (derived projection of current time / real-time character locations) is currently disabled. During this period narrator only reads fields maintained by author/state_updater in `status.md`.
 
 Narrator uses the main LLM configuration (`LLM_*` env vars).
 
@@ -304,7 +300,6 @@ Save includes:
 - Character `memory.jsonl` (structured long-term memory, one `EpisodeMemory` per line, includes stable `id`, `raw_dialogue` trace field, and archive-refreshed `last_recalled_at`)
 - Character `memory_draft.jsonl` (when present; each line `{"turn": int, "text": str}`, ensuring unclosed merge memories are not lost on save)
 - Character `understanding.jsonl` (when present; stable beliefs linked back to EpisodeMemory ids)
-- Character `schedule.json` (when present)
 - Narrator raw history (each entry carries turn number)
 - Narrator `world_schedule.json` when present
 - Per-agent `.history_window_state.json`

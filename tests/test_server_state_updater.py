@@ -568,7 +568,7 @@ async def test_chat_stream_emits_created_character_identity(monkeypatch):
             new_characters=[
                 {
                     "name_hint": "桥本志津",
-                    "relation_description": "Alice 的家人",
+                    "background_hint": "Alice 的家人，在附近工作，偶尔来探望。",
                 }
             ],
         ), True

@@ -234,7 +234,7 @@ def get_episodes(tmp_path, agent_name: str, date: str) -> list[EpisodeMemory]:
 
 async def add_episodes(store, episodes: list[EpisodeMemory]) -> None:
     for episode in episodes:
-        await store.add(episode)
+        await store.add_episode(episode)
 
 
 def _chunk_row_by_content(conn, content: str):
@@ -353,7 +353,7 @@ class TestVectorStoreEdgeCases:
     async def test_search_nonexistent_agent(self, clean_store):
         """测试索引存在时搜索不存在的角色"""
         store = clean_store
-        await store.add_many(
+        await store.add_episodes(
             [
                 EpisodeMemory(
                     date="10月1日",
@@ -635,7 +635,7 @@ class TestVectorStoreMemoryIndexing:
             title="中午",
         )
 
-        await store.add(first)
+        await store.add_episode(first)
         db = await store._get_db()
         await db.execute(
             "UPDATE EpisodeMemory SET last_recalled_at = ? WHERE content = ?",
@@ -643,7 +643,7 @@ class TestVectorStoreMemoryIndexing:
         )
         await db.commit()
 
-        await store.add(second)
+        await store.add_episode(second)
 
         rows = await db.execute_fetchall(
             "SELECT id, content, last_recalled_at "

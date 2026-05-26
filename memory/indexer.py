@@ -43,7 +43,7 @@ async def rebuild_memory_index(
             continue
 
         records = read_memory_jsonl(agent)
-        inserted = await vector_store.add_many(records, batch_size=batch_size)
+        inserted = await vector_store.add_episodes(records, batch_size=batch_size)
 
         logger.info("[indexer] %s 索引完成：records=%s, inserted=%s", agent, len(records), inserted)
 
@@ -73,6 +73,8 @@ async def _rebuild_understanding_index_for_agents(agents: list[str]) -> None:
         if not understandings:
             logger.info("[indexer] 跳过 %s：未找到 understanding.jsonl 或为空", agent)
             continue
-        for u in understandings.values():
-            await vector_store.add_understanding(u)
-        logger.info("[indexer] %s Understanding 索引完成：count=%s", agent, len(understandings))
+        inserted = await vector_store.add_understandings(list(understandings.values()))
+        logger.info(
+            "[indexer] %s Understanding 索引完成：count=%s, inserted=%s",
+            agent, len(understandings), inserted,
+        )

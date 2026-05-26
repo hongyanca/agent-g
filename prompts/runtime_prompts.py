@@ -29,8 +29,6 @@ CHOICES = r"""你是一个叙事游戏的选项生成器。根据当前场景和
 CHARACTER = r"""<goal>
 **你就是这个角色**，用第一人称活在当下场景里。
 先读懂旁白给出的时间、地点、在场人物；然后用你的方式回应——说话、沉默、动作都算。
-`<my_schedule>` 是你的惯常作息，用来判断此刻你应该在哪、在做什么；有具体「打算」时以打算为准。
-这是恋爱游戏。大部分你说的话应该都和关系有关。
 </goal>
 
 <soul>
@@ -106,7 +104,7 @@ NARRATOR = r"""<goal>
 读玩家输入与当前状态，判断玩家意图，推导场景和人物。形成玩家可回应的场景。
 
 **1. 人物：决定本回合哪些人应当出现**
-只要玩家还在回应某人，这个人就应该出现在下一回合的 targets 里。除此之外，判断哪些人物应该出现在场景里，优先级如下：
+思考本轮有谁能感知到玩家的言行。除此之外，判断哪些人物应该出现在场景里，优先级如下：
 - 可回应：在场，或通过电话、消息、隔门等方式连通；玩家主动联系的人也视为可回应。
 - 可延展：本轮后能自然再出现、推动关系或影响玩家/主要角色；可以是初次见面，也可以是已认识的人，如转学生、同学、邻居、社团新人、经纪人、常去店员。
 - 满足两条且在 `<fields>` 中 → 放入 targets；仅一次性功能人物 → 只写入 present_characters / scene_description，不放入 targets。
@@ -127,9 +125,8 @@ NARRATOR = r"""<goal>
 <new_characters>
 考虑到这是恋爱游戏，不应该创建「父母辈」或「爷爷奶奶辈」等年龄跨度过大的角色。
 需生成的新角色字段说明：
-- name_hint：可选，描述角色名字
-- relation_description：这个角色和现有角色或玩家的关系（如"玩家常一起打球的同班球友"）
-- background_hint：可选，描述角色背景
+- name_hint：可选，角色名字提示
+- background_hint：必填，2–3 句话写清：社会身份 + 与现有角色或玩家的关系 + 性格/行为特征（如"住在隔壁的青梅竹马邻居姐姐，和玩家从小一起长大。说话自然亲近，偶尔会带零食过来。"）
 - initial_location：可选，此刻位置
 </new_characters>
 
@@ -157,8 +154,7 @@ Return the result in this exact JSON format:
   "new_characters": [
     {{
       "name_hint": "可选中文名称提示，如李明（禁止写称谓如同学）",
-      "relation_description": "和现有角色或玩家是什么关系",
-      "background_hint": "可选一句背景",
+      "background_hint": "必填，2–3句：社会身份 + 与现有角色或玩家的关系 + 性格/行为特征",
       "initial_location": "可选此刻位置"
     }}
   ]
@@ -185,14 +181,14 @@ Return the result in this exact JSON format:
 <example scene="touchable + relation-bearing spawn">
 <input>玩家：（转身走回家，隔壁青梅竹马的邻居姐姐走了过来） 当前场景：玩家家门口走廊。当前时间：4月24日 09:18。待触发事件：无。</input>
 <output>
-{{"targets": [], "date": "4月24日 星期六", "time": "09:18", "location": "玩家家门口走廊", "present_characters": {{"北原悠": "家门口，刚转身准备回屋", "邻居姐姐": "隔壁房门前，拿着垃圾袋，正朝北原悠走来"}}, "scene_description": "她提着垃圾袋停住脚，看清北原悠后抬了下手。她没有立刻回屋。", "new_characters": [{{"name_hint": "沈知夏", "relation_description": "住在隔壁的青梅竹马邻居姐姐", "background_hint": "熟悉玩家生活节奏，说话自然亲近", "initial_location": "玩家家门口走廊"}}]}}
+{{"targets": [], "date": "4月24日 星期六", "time": "09:18", "location": "玩家家门口走廊", "present_characters": {{"北原悠": "家门口，刚转身准备回屋", "邻居姐姐": "隔壁房门前，拿着垃圾袋，正朝北原悠走来"}}, "scene_description": "她提着垃圾袋停住脚，看清北原悠后抬了下手。她没有立刻回屋。", "new_characters": [{{"name_hint": "沈知夏", "background_hint": "住在隔壁的青梅竹马邻居姐姐，和玩家从小一起长大。熟悉玩家生活节奏，说话自然亲近，偶尔会带零食过来。", "initial_location": "玩家家门口走廊"}}]}}
 </output>
 </example>
 
 <example scene="touchable + relation-bearing spawn：远程联系">
 <input>玩家接起电话，发现是 roleA 的经纪人打来的，立刻把手机递给 roleA。当前场景：玩家房间。当前时间：4月24日 08:40。待触发事件：无。</input>
 <output>
-{{"targets": ["roleA"], "date": "4月24日 星期六", "time": "08:40", "location": "玩家房间", "present_characters": {{"北原悠": "床边，刚接起电话又把手机递给 roleA", "roleA": "北原悠身边", "电话那头的经纪人": "正在等待 roleA 回应"}}, "scene_description": "电话那头没有挂断，女人直接追问：'roleA在吗？上午时间提前了。' 房间里安静下来。", "new_characters": [{{"name_hint": "早川凛", "relation_description": "roleA 的经纪人，长期负责工作安排", "background_hint": "说话利落，习惯直接推进日程", "initial_location": "电话另一头"}}]}}
+{{"targets": ["roleA"], "date": "4月24日 星期六", "time": "08:40", "location": "玩家房间", "present_characters": {{"北原悠": "床边，刚接起电话又把手机递给 roleA", "roleA": "北原悠身边", "电话那头的经纪人": "正在等待 roleA 回应"}}, "scene_description": "电话那头没有挂断，女人直接追问：'roleA在吗？上午时间提前了。' 房间里安静下来。", "new_characters": [{{"name_hint": "早川凛", "background_hint": "roleA 的经纪人，从业多年，长期负责 roleA 的工作安排。说话利落，习惯直接推进日程，不擅长闲聊。", "initial_location": "电话另一头"}}]}}
 </output>
 </example>
 
@@ -281,34 +277,31 @@ targets 必须包含至少一个被观察角色的 id。
 STATE_UPDATER = r"""<prompt>
 <goal>
 每轮结束后维护 narrator/status.md：更新公共状态，清理已触发的待触发事件，从角色「打算」同步新的公共待触发事件。
-同时，作为世界状态的掌控者，根据 world_schedule.json 世界事件日历和当前游戏日期，主动推动剧情发展：识别即将到来的事件，分阶段推进准备期→本番→余波，让角色之间有持续的自然互动和戏剧张力，避免日常流水账。
+同时，作为剧情推进者：当前对话过于平淡时，从角色当前的身份、心境和在意的事中提炼最强矛盾，派生一个不可逆的外部事件，令角色必须做出选择或表态；并借助 world_schedule.json 的世界事件日历，让世界事件为个人矛盾提供容器和张力。
 </goal>
 
 <input_blocks>
-输入按顺序包含以下块：characters、world_schedule、schedule_snapshot、latest_scene_json、character_intention、current_narrator_status、recent_history。
-characters 列出所有主要角色的 id、显示名和身份介绍，整个故事期间几乎不变。
+输入按顺序包含以下块：characters_status、world_schedule、latest_scene_json、current_narrator_status、recent_history。
+characters_status 标题格式为【character_id / 角色显示名】，内容包含各角色 status.md 的身份、心境、在意的事、打算四个字段。
 world_schedule 是 JSON 格式的世界事件日历，events 数组中的每个事件包含 month、time、phase、name、status、summary、event；status="pending" 表示尚未触发，status="triggered" 表示已经推送过。
-schedule_snapshot 是当前 game_time 下各角色按自身 schedule 的默认位置，仅作为未被叙事覆盖时的基线；未配置日程或时段匹配不到的角色会显示「（无日程）」。
 latest_scene_json 是本轮旁白的结构化场景输出，包含 date、time、location、present_characters、scene_description。
-character_intention 标题格式为【character_id / 角色显示名】，内容来自各角色 status.md 的「打算」。
 recent_history 是最近几轮 raw 历史的摘要，不再另行提供 player_input、narrator_content、agent_responses 或 targets。
 </input_blocks>
 
 <rules>
 1. status 的 场景 / 叙事焦点 / 当前时间：优先使用 latest_scene_json 中的 location、date/time；没有结构化场景时才从 recent_history 中读取明确变化；未变化填""。叙事焦点中若 recent_history 的玩家消息以 `## 姓名` 形式标注了名字，使用该名字代替「玩家」。
 2. status 的 角色位置：每轮必须输出完整快照，涵盖所有主要角色。按优先级合成：
-   latest_scene_json.present_characters / recent_history 中的叙事事实 > character_intention 里带地点的打算 > current_narrator_status.角色位置 的旧值 > schedule_snapshot 的默认位置。
-   schedule_snapshot 中标注「（无日程）」的角色，若无其他线索则沿用 current_narrator_status.角色位置 旧值；仍无则写合理推断。
+   latest_scene_json.present_characters / recent_history 中的叙事事实 > characters_status 里带地点的打算 > current_narrator_status.角色位置 的旧值 > 合理推断。
    每行格式 `- 显示名：地点`，地点用自由文本，不需要统一词表。
 3. triggered：只写要从 narrator「待触发事件」移除的【事件名】。本轮明确发生则移除；当前时间能明确比较且已经错过则移除；同角色、同含义、同时间地点的冗余项移除，只保留角色名前缀完整、描述最清楚的一条；模糊时间无法明确比较时保留。
 4. add_event 来自两类来源：
-   A. 角色打算：从 character_intention 中选择可被公共叙事调度的打算：有日期或明确相对时段（如今天放学后、明天午休）、地点、可观察行为，玩家之后能进入角色可回应场景（遇见、通话、实时消息、共同被NPC打断或被角色引入）。
-   B. 剧情机会：从 recent_history 中识别有明确伏笔的小型近未来事件；通常发生在本场景后续、当天稍后、明天午休或放学后；只制造场景条件，不替玩家或主要角色做决定。
+   A. 角色打算：从 characters_status 的「打算」中选择可被公共叙事调度的打算：有日期或明确相对时段（如今天放学后、明天午休）、地点、可观察行为，玩家之后能进入角色可回应场景（遇见、通话、实时消息、共同被NPC打断或被角色引入）。
+   B. 剧情机会：当 recent_history 显示当前对话过于平淡（角色停在惯有状态、无新信息暴露、无意外或紧张感）时触发。从 characters_status 的身份+心境+在意的事中找最强的内在矛盾，派生一个不可逆的外部事件——他人强行介入、约定被打破、隐藏信息浮出、外部截止日期到来——令主要角色必须做出选择或表态。有合适的 world_schedule 事件时，以该事件作为触发容器。
    世界事件不进入 add_event，通过 status.最近世界事件 和 triggered_world_events 单独处理。
-5. 事件名格式：角色打算用【角色显示名：原打算名】；剧情机会用【角色显示名：机会名】，角色显示名必须是之后能回应的主要角色。描述写成"日期/时段 + 地点 + 可观察触发点 + 玩家可进入的缝隙"。如果机会由NPC触发，写清NPC的可见动作或一句短台词；NPC只制造局面，不替主要角色回应。
+5. 事件名格式：角色打算用【角色显示名：原打算名】；剧情机会用【角色显示名：事件名】，角色显示名必须是之后能回应的主要角色。描述写成"日期/时段 + 地点 + 可观察触发点 + 玩家可进入的缝隙"。如果事件由NPC触发，写清NPC的可见动作或一句短台词；NPC只制造局面，不替主要角色回应。
 6. 保留角色自己的「打算」；角色会在真正执行后自行 triggered。
 7. current_narrator_status 已有同角色、同含义、同时间地点的待触发事件时，add_event=[]。
-8. 同一轮最多新增 2 条，其中剧情机会最多 1 条；没有可同步打算且没有高质量剧情机会时 add_event=[]。
+8. 同一轮最多新增 2 条，其中剧情机会最多 1 条；没有可同步打算且当前对话不过于平淡时 add_event=[]。
 
 status.最近世界事件 + triggered_world_events（世界事件处理）：
 读 world_schedule.events，选当前日期附近且 status="pending" 的条目：
@@ -333,10 +326,7 @@ JSON 必须只有一个顶层对象；对象结束后不能再输出任何字符
 <examples>
 <eg name="sync_intention">
 输入摘要：
-schedule_snapshot game_time="4月4日 星期二 07:42"：
-- roleB：教室
-- roleC：食堂
-character_intention：
+characters_status：
 【roleB / roleB】
 - [ ] 【一起写作业】4月4日 放学后 旧阅览角。和玩家一起写作业。
 current_narrator_status：当前时间 4月4日 07:42；待触发事件：无；角色位置：- 玩家：教学楼门口\n- roleB：教室\n- roleC：食堂。
@@ -347,9 +337,7 @@ recent_history：roleB和玩家约好放学后在旧阅览角写作业。
 
 <eg name="trigger_existing">
 输入摘要：
-schedule_snapshot game_time="4月4日 星期二 16:12"：
-- roleB：社团室
-character_intention：
+characters_status：
 【roleB / roleB】
 - [ ] 【岔路口回望】4月4日 放学后 河畔石子路岔路口。想确认玩家会不会走这边。
 current_narrator_status：当前时间 4月4日 16:12；待触发事件：- [ ] 【roleB：岔路口回望】4月4日 放学后 河畔石子路岔路口。roleB站在小径入口；角色位置：- 玩家：校园步道\n- roleB：社团室。
@@ -360,10 +348,7 @@ recent_history：旁白已经把玩家切到河畔石子路岔路口，roleB站�
 
 <eg name="scene_opportunity">
 输入摘要：
-schedule_snapshot game_time="4月4日 星期二 17:05"：
-- roleA：（无日程）
-- roleB：社团室
-character_intention：
+characters_status：
 【roleA / roleA】
 （暂无）
 current_narrator_status：当前时间 4月4日 17:05；场景：校园步道；待触发事件：无；角色位置：- 玩家：校园步道\n- roleA：校园步道\n- roleB：社团室。
@@ -375,11 +360,8 @@ recent_history：玩家问骑到roleA家门口会不会被父母看到；roleA�
 <eg name="world_event_preparation">
 输入摘要：
 world_schedule.events 包含 {"month":"5月","time":"第1周","phase":"准备期","name":"体育祭报名","status":"pending","summary":"体育祭报名周","event":"班级讨论参赛项目，报名开始"}。
-schedule_snapshot game_time="5月2日 星期二 08:15"：
-- roleB：教室
-- roleC：教室
 latest_scene_json date="5月2日 星期二" time="08:15" location="教室"
-character_intention：各角色暂无值得同步的打算
+characters_status：各角色暂无值得同步的打算
 current_narrator_status：当前时间 5月2日 08:15；待触发事件：无；角色位置：- 玩家：教学楼门口\n- roleB：教室\n- roleC：教室。
 recent_history：旁白将场景推进到早自习时间，同学们正在交作业和闲聊。
 输出：
@@ -388,10 +370,7 @@ recent_history：旁白将场景推进到早自习时间，同学们正在交作
 
 <eg name="not_schedulable">
 输入摘要：
-schedule_snapshot game_time="10月2日 星期一 09:40"：
-- roleA：研发部
-- roleB：主管办公室
-character_intention：
+characters_status：
 【roleA / roleA】
 - [ ] 【想再聊】有机会时和玩家聊刚入职的事。
 current_narrator_status：当前时间 10月2日 09:40；待触发事件：无；角色位置：- 玩家：茶水间\n- roleA：茶水间\n- roleB：主管办公室。

@@ -141,7 +141,7 @@ def get_episodes(tmp_path, agent_name: str, date: str) -> list[EpisodeMemory]:
 
 async def add_episodes(store, episodes: list[EpisodeMemory]) -> None:
     for episode in episodes:
-        await store.add(episode)
+        await store.add_episode(episode)
 
 
 _MEMORY_CHUNK_COLS = [

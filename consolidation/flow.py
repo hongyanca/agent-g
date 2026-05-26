@@ -522,7 +522,7 @@ class MemoryConsolidationFlow:
             rewrite_memory_draft(agent_name, remaining)
 
             for ep in appended:
-                await vector_store.add(ep)
+                await vector_store.add_episode(ep)
                 self.last_created_episodes.append(
                     CreatedEpisodeSummary(agent_name=agent_name, title=ep.title or "")
                 )

@@ -1,14 +1,9 @@
-"""对话运行时的 prompt 构建（角色 / narrator user message、history 窗口、schedule 快照）。"""
+"""对话运行时的 prompt 构建（角色 / narrator user message、history 窗口）。"""
 
 from __future__ import annotations
 
 import re
 
-from world.schedule import (
-    get_default_location,
-    load_character_schedule,
-    parse_game_time,
-)
 from prompts.runtime_prompts import CHARACTER, NARRATOR
 from shared.config import (
     HISTORY_HIGH,
@@ -27,16 +22,6 @@ from storage.agent_files import (
 )
 from log_config.routing import routing_logger
 
-
-_WEEKDAY_EN_TO_CN = {
-    "mon": "一",
-    "tue": "二",
-    "wed": "三",
-    "thu": "四",
-    "fri": "五",
-    "sat": "六",
-    "sun": "日",
-}
 
 # ---------------------------------------------------------------------------
 # 对话历史窗口（原 engine/history.py）
@@ -163,62 +148,6 @@ def build_system_prompt(agent_name: str, soul_content: str) -> str:
     )
 
 
-def _format_days(days: list[str]) -> str:
-    """mon/tue/... 折叠成中文周几表达。"""
-    unique = set(days)
-    if unique == {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}:
-        return "每天"
-    if unique == {"mon", "tue", "wed", "thu", "fri"}:
-        return "周一至周五"
-    if unique == {"sat", "sun"}:
-        return "周末"
-    ordered = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    return "、".join(f"周{_WEEKDAY_EN_TO_CN[d]}" for d in ordered if d in unique)
-
-
-def build_my_schedule_block(agent_name: str) -> str:
-    """<my_schedule>：character 专用，渲染自己的 schedule.json。"""
-    if agent_name == "narrator":
-        return ""
-    schedule = load_character_schedule(agent_name)
-    if not schedule.periods:
-        return ""
-
-    blocks: list[str] = []
-    for period in schedule.periods:
-        header = period.name or "日程"
-        period_lines = [f"{header}（{period.start} 至 {period.end}）"]
-        for slot in period.slots:
-            period_lines.append(f"- {_format_days(slot.days)} {slot.time}：{slot.location}")
-        blocks.append("\n".join(period_lines))
-
-    body = "\n\n".join(blocks)
-    return f"<my_schedule>\n{body}\n</my_schedule>"
-
-
-def build_schedule_snapshot(game_time: str) -> str:
-    """渲染 state_updater 输入的 <schedule_snapshot>：当前时段各角色按 schedule 的默认位置。
-
-    未配置 schedule 或 game_time 解析不出 slot 的角色标注为「（无日程）」，供 LLM 判断。
-    无任何主要角色时返回空字符串。
-    """
-    slot_key = parse_game_time(game_time) if game_time else None
-    rows: list[str] = []
-    for agent in get_agent_names(include_narrator=False):
-        soul = read_agent_file(agent, "soul.md")
-        display = get_display_name(agent, soul) if soul else agent
-        location = ""
-        if slot_key is not None:
-            location = (get_default_location(agent, slot_key, game_time) or "").strip()
-        rows.append(f"- {display}：{location}" if location else f"- {display}：（无日程）")
-    if not rows:
-        return ""
-    header = (
-        f'<schedule_snapshot game_time="{game_time}">' if game_time else "<schedule_snapshot>"
-    )
-    return f"{header}\n" + "\n".join(rows) + "\n</schedule_snapshot>"
-
-
 def build_characters_block(tag: str = "characters") -> str:
     """列出所有主要角色的 id / 显示名 / identity。
 
@@ -258,9 +187,7 @@ def build_user_message(
     is_narrator = agent_name == "narrator"
     history, was_truncated = build_history_transcript(agent_name, raw_messages or [])
     status_content = read_agent_file(agent_name, "status.md")
-    my_schedule = build_my_schedule_block(agent_name) if not is_narrator else ""
 
-    parts.append(my_schedule)
     parts.append(build_player_block(latest_user_input) if is_narrator else "")
     parts.append(build_characters_block(tag="fields") if is_narrator else "")
     parts.append(f"最近对话历史:\n\n{history}" if history else "")

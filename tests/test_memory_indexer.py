@@ -151,7 +151,7 @@ async def test_vector_store_add_many_batches_embedding_requests(tmp_path, monkey
     monkeypatch.setattr(vector_store_module, "embed_async", fake_embed_async)
     monkeypatch.setattr(store, "_insert_prepared_batch", fake_insert_prepared_batch)
 
-    inserted = await store.add_many(
+    inserted = await store.add_episodes(
         [
             EpisodeMemory(date="4月3日", content="第一条。", memory_owner="alice", title="标题一"),
             EpisodeMemory(date="4月3日", content="第二条。", memory_owner="alice", title="标题二"),

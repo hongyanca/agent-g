@@ -203,7 +203,7 @@ async def test_narrator_route_filters_targets_and_sanitizes_scene(monkeypatch):
 def test_narrator_route_validation_rejects_unknown_targets():
     output = _narrator_output(targets=["ghost"])
 
-    with pytest.raises(ValueError, match="invalid targets"):
+    with pytest.raises(ValueError, match="no valid targets"):
         Narrator._validate_route_output(output, ["mitsuki"])
 
 
@@ -221,12 +221,12 @@ def test_narrator_route_validation_rejects_invalid_new_character_anchor():
         new_characters=[
             {
                 "name_hint": "桥本志津",
-                "relation_description": "",
+                "background_hint": "",
             }
         ],
     )
 
-    with pytest.raises(ValueError, match="missing relation_description"):
+    with pytest.raises(ValueError, match="missing background_hint"):
         Narrator._validate_route_output(output, ["mitsuki"])
 
 
@@ -275,7 +275,7 @@ async def test_narrator_route_allows_spawn_without_existing_targets(monkeypatch)
             new_characters=[
                 {
                     "name_hint": "桥本志津",
-                    "relation_description": "美月的妈妈",
+                    "background_hint": "美月的妈妈，温柔而谨慎，常在放学时到校门口等女儿。",
                 }
             ],
         )
@@ -564,7 +564,6 @@ async def test_narrator_update_state_uses_state_updater_agent(monkeypatch):
         "get_state_updater_agent",
         lambda: fake_agent,
     )
-    monkeypatch.setattr(character_module, "build_schedule_snapshot", lambda _t: "")
     history_calls: list[dict] = []
 
     def fake_load_conversation_history(*, limit=None, turns=None):

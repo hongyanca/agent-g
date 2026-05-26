@@ -21,16 +21,11 @@ from agents.factory import (
 from agents.runner import run_structured_agent
 from agents.schema import (
     CharacterOutput,
-    CharacterSchedule,
     NarratorOutput,
     NewCharacterRequest,
     StateUpdaterOutput,
 )
-from engine.prompt_builder import (
-    build_characters_block,
-    build_schedule_snapshot,
-    build_user_message,
-)
+from engine.prompt_builder import build_user_message
 from engine.memory_query_builder import build_retrieval_queries
 from llm.embedding import embed_sync
 from llm.config import get_llm_config
@@ -61,13 +56,13 @@ from storage.agent_files import (
     write_sidecar_json,
 )
 from storage.history import load_conversation_history
-from world.schedule import load_character_schedule
 
 
 _FILE_UPDATES_EVENT = "agentgal.routing.file_updates"
 
 # 由 add_event / mark_triggered 逐条维护，禁止通过 set_status_fields 整段覆写
 _EVENT_SECTION_FIELDS = {"打算", "待触发事件"}
+_CHARACTER_STATUS_FIELDS = ("身份", "心境", "在意的事", "打算")
 _WORLD_SCHEDULE_FILENAME = "world_schedule.json"
 
 
@@ -206,12 +201,6 @@ class Character(BaseEntity):
     @property
     def _sdk(self) -> Any:
         return get_conversation_agent(self.name)
-
-    # ── Character 独有的动态文件（全部实时读）──
-
-    @property
-    def schedule(self) -> CharacterSchedule:
-        return load_character_schedule(self.name)
 
     # ── Character 独有的写入方法 ──
 
@@ -409,7 +398,7 @@ class Narrator(BaseEntity):
         existing_agents: list[str],
     ) -> None:
         """校验 schema 无法表达的运行时路由约束，失败交给 runner 重试。"""
-        valid_targets = set(existing_agents)
+        valid_agents = set(existing_agents)
         errors: list[str] = []
 
         if not output.targets and not output.new_characters:
@@ -420,9 +409,12 @@ class Narrator(BaseEntity):
             errors.append(f"invalid targets={invalid_targets!r}")
 
         for spec in output.new_characters:
-            label = spec.name_hint.strip() or spec.relation_description.strip() or "new_character"
-            if not spec.relation_description.strip():
-                errors.append(f"{label!r} missing relation_description")
+            label = spec.name_hint.strip() or spec.background_hint.strip()[:20] or "new_character"
+            if not spec.background_hint.strip():
+                errors.append(f"{label!r} missing background_hint")
+
+        if not any(t in valid_agents for t in output.targets) and not output.new_characters:
+            errors.append("no valid targets or new characters")
 
         if errors:
             raise ValueError("; ".join(errors))
@@ -437,21 +429,20 @@ class Narrator(BaseEntity):
         seen: set[tuple[str, str]] = set()
         for spec in specs:
             name_hint = spec.name_hint.strip()
-            description = spec.relation_description.strip()
-            dedupe_key = (name_hint, description)
-            label = name_hint or description or "（未命名新角色）"
+            background_hint = spec.background_hint.strip()
+            dedupe_key = (name_hint, background_hint)
+            label = name_hint or background_hint[:20] or "（未命名新角色）"
             if dedupe_key in seen:
                 continue
-            if not description:
+            if not background_hint:
                 routing_logger.warning(
-                    f"[narrator] new_characters 中 {label!r} 缺 relation_description，跳过"
+                    f"[narrator] new_characters 中 {label!r} 缺 background_hint，跳过"
                 )
                 continue
             kept.append(
                 NewCharacterRequest(
                     name_hint=name_hint,
-                    relation_description=description,
-                    background_hint=spec.background_hint.strip(),
+                    background_hint=background_hint,
                     initial_location=spec.initial_location.strip(),
                 )
             )
@@ -507,11 +498,8 @@ class Narrator(BaseEntity):
 
     def _build_state_updater_input(self) -> str:
         narrator_status = self.status
-        game_time = extract_status_field(narrator_status, "当前时间").strip()
-        schedule_snapshot = build_schedule_snapshot(game_time)
-
-        character_intention = self._format_character_intentions()
-        raw_messages = load_conversation_history(turns=1)
+        characters_status = self._format_characters_status()
+        raw_messages = load_conversation_history(turns=5)
         latest_scene = next(
             (
                 payload
@@ -532,37 +520,37 @@ class Narrator(BaseEntity):
             history_lines.append(f"{role_to_speaker(role)}: {content}")
         recent_history = "\n\n".join(history_lines) if history_lines else "无"
 
-        characters_block = build_characters_block()
         world_schedule_content = read_agent_file(self.name, _WORLD_SCHEDULE_FILENAME)
 
         parts: list[str] = []
-        if characters_block:
-            parts.append(characters_block)
+        parts.append(f"<characters_status>\n{characters_status}\n</characters_status>")
         if world_schedule_content:
             parts.append(_wrap_block("world_schedule", world_schedule_content.strip()))
-        if schedule_snapshot:
-            parts.append(schedule_snapshot)
         if latest_scene:
             parts.append(
                 "<latest_scene_json>\n"
                 + json.dumps(latest_scene, ensure_ascii=False, indent=2)
                 + "\n</latest_scene_json>"
             )
-        parts.append(f"<character_intention>\n{character_intention}\n</character_intention>")
         parts.append(f"<current_narrator_status>\n{narrator_status}\n</current_narrator_status>")
         parts.append(f"<recent_history>\n{recent_history}\n</recent_history>")
         return "\n\n---\n\n".join(parts)
 
     @staticmethod
-    def _format_character_intentions() -> str:
-        """提取所有角色的「打算」，供 state_updater 同步到公共待触发事件。"""
+    def _format_characters_status() -> str:
+        """提取所有角色的身份/心境/在意的事/打算，供 state_updater 评估剧情状态与同步待触发事件。"""
         blocks: list[str] = []
         for agent_name in get_agent_names(include_narrator=False):
             status_content = read_agent_file(agent_name, "status.md")
-            intentions = extract_status_field(status_content, "打算").strip() or "（暂无）"
             soul_content = read_agent_file(agent_name, "soul.md")
             display_name = get_display_name(agent_name, soul_content)
-            blocks.append(f"【{agent_name} / {display_name}】\n{intentions}")
+            lines: list[str] = []
+            for field in _CHARACTER_STATUS_FIELDS:
+                value = extract_status_field(status_content, field).strip()
+                if value:
+                    lines.append(f"{field}：{value}")
+            content = "\n".join(lines) if lines else "（暂无）"
+            blocks.append(f"【{agent_name} / {display_name}】\n{content}")
         return "\n\n".join(blocks) if blocks else "无"
 
     def _apply_state_updates(self, output: StateUpdaterOutput) -> None:
