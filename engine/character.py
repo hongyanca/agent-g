@@ -404,7 +404,7 @@ class Narrator(BaseEntity):
         if not output.targets and not output.new_characters:
             errors.append("missing route: targets or new_characters required")
 
-        invalid_targets = [target for target in output.targets if target not in valid_targets]
+        invalid_targets = [target for target in output.targets if target not in valid_agents]
         if invalid_targets:
             errors.append(f"invalid targets={invalid_targets!r}")
 

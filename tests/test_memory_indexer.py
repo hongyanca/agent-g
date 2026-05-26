@@ -25,13 +25,19 @@ class FakeVectorStore:
         self.deleted_all.append(list(agent_names))
         return {name: True for name in agent_names}
 
-    async def add_many(self, records: list[EpisodeMemory], *, batch_size: int = 64) -> int:
+    async def add_episodes(self, records: list[EpisodeMemory], *, batch_size: int = 64) -> int:
         self.added_records.extend(records)
         self.batch_sizes.append(batch_size)
         return len(records)
 
-    async def add_understanding(self, understanding: Understanding) -> None:
-        self.added_understandings.append(understanding)
+    async def add_understandings(
+        self,
+        understandings: list[Understanding],
+        *,
+        batch_size: int = 64,
+    ) -> int:
+        self.added_understandings.extend(understandings)
+        return len(understandings)
 
 
 def _write_memory_jsonl(tmp_path: Path, agent_name: str, records: list[EpisodeMemory]) -> None:

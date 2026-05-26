@@ -602,10 +602,10 @@ async def test_narrator_update_state_uses_state_updater_agent(monkeypatch):
     assert captured["agent"] is fake_agent
     assert captured["output_type"] is StateUpdaterOutput
     assert captured["usage_agent"] == "state_updater"
-    assert history_calls == [{"limit": None, "turns": 1}]
+    assert history_calls == [{"limit": None, "turns": 5}]
     user_input = captured["user_input"]
     assert "<world_event_state>" not in user_input
-    assert user_input.index("<character_intention>") < user_input.index("<current_narrator_status>")
+    assert user_input.index("<characters_status>") < user_input.index("<current_narrator_status>")
     assert user_input.index("<current_narrator_status>") < user_input.index("<recent_history>")
     assert "玩家: 更早的问题" not in user_input
     assert "旁白: 手机在掌心震了一下。" in user_input
